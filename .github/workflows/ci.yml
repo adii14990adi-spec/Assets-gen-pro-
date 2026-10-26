@@ -100,9 +100,9 @@ jobs:
         run: .venv/bin/python scripts/setup_blender_runtime.py --runtime-dir "$HOME/.local/blender-runtime"
 
       - name: Run Blender background smoke test
-        env:
-          BLENDER_PYTHON_EXECUTABLE: ${{ runner.os == 'Linux' && format('{0}/.local/blender-runtime/bin/python', env.HOME) || '' }}
-        run: .venv/bin/python scripts/smoke_test_blender.py
+        run: |
+          BLENDER_PYTHON_EXECUTABLE="$HOME/.local/blender-runtime/bin/python" \
+            .venv/bin/python scripts/smoke_test_blender.py
 
       - name: Generate & independently validate sample Rajasthani Haveli GLB
         run: |
@@ -126,14 +126,14 @@ jobs:
         run: |
           echo "### Procedural 3D Asset Studio — CI Verification" >> "$GITHUB_STEP_SUMMARY"
           if [ -f ci_artifacts/sample_asset/ci_sample_rajasthani_haveli_metadata.json ]; then
-            .venv/bin/python -c "
+            .venv/bin/python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
-          m = json.load(open('ci_artifacts/sample_asset/ci_sample_rajasthani_haveli_metadata.json'))
-          print(f'- **Sample Asset**: {m[\"name\"]} (\`{m[\"glb_filename\"]}\`, {m[\"glb_size_bytes\"]:,} bytes)')
-          print(f'- **Blender Version**: {m[\"blender_version\"]}')
-          print(f'- **Measured Triangles**: {m[\"stats\"][\"actual_triangles\"]:,}')
-          print(f'- **Validation Passed**: {m[\"validation\"][\"valid\"]}')
-          " >> "$GITHUB_STEP_SUMMARY"
+          m = json.load(open("ci_artifacts/sample_asset/ci_sample_rajasthani_haveli_metadata.json"))
+          print(f"- **Sample Asset**: {m['name']} (`{m['glb_filename']}`, {m['glb_size_bytes']:,} bytes)")
+          print(f"- **Blender Version**: {m['blender_version']}")
+          print(f"- **Measured Triangles**: {m['stats']['actual_triangles']:,}")
+          print(f"- **Validation Passed**: {m['validation']['valid']}")
+          PY
           fi
 
       - name: Upload test reports & generated sample GLB artifacts
