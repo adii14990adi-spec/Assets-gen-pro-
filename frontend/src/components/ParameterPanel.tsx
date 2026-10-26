@@ -295,6 +295,38 @@ export const ParameterPanel: React.FC<ParameterPanelProps> = ({
                   </div>
                 );
               }
+              if (spec.type === "color") {
+                const strVal = typeof rawVal === "string" && rawVal.startsWith("#") ? rawVal : "";
+                const pickerVal = strVal || (spec.name === "skin_color" ? "#e6a88a" : "#3b82f6");
+                return (
+                  <div key={spec.name} className="field-row">
+                    <div className="slider-header">
+                      <label htmlFor={`param-${spec.name}`}>{spec.label}</label>
+                      <span className="mono-val">{strVal || "theme"}</span>
+                    </div>
+                    <div className="seed-row">
+                      <input
+                        id={`param-${spec.name}`}
+                        type="color"
+                        className="studio-input"
+                        style={{ height: 36, padding: 2, cursor: "pointer" }}
+                        value={pickerVal}
+                        onChange={(e) => onChangeParameter(spec.name, e.target.value)}
+                      />
+                      {strVal && (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Reset to theme default"
+                          onClick={() => onChangeParameter(spec.name, "")}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
               return (
                 <div key={spec.name} className="field-row">
                   <div className="slider-header">

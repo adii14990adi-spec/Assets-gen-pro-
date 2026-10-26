@@ -10,6 +10,7 @@ Supports:
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import uuid
 from datetime import UTC, datetime
@@ -17,12 +18,19 @@ from typing import Any
 
 import httpx
 
-from backend.blender.runtime import run_blender_generation_job
+from backend.blender.runtime import run_blender_generation_job, select_generation_engine
 from backend.config import Settings, get_settings
 from backend.database import StudioRepository
 from backend.enums import ExecutionMode, JobStatus
-from backend.generator.catalog import validate_and_merge_parameters
-from backend.schemas import AssetRecord, GenerateAssetRequest, JobProgressEntry, JobRecord
+from backend.fallback.engine import generate_glb_in_memory
+from backend.generator.catalog import resolve_preset_identifier, validate_and_merge_parameters
+from backend.schemas import (
+    AssetRecord,
+    DirectGenerateRequest,
+    GenerateAssetRequest,
+    JobProgressEntry,
+    JobRecord,
+)
 from backend.storage.store import ArtifactStorage
 from backend.validation.validator import validate_generated_asset
 
@@ -107,13 +115,22 @@ class JobManager:
         self._broadcast(job)
 
     async def enqueue_generation(self, req: GenerateAssetRequest) -> JobRecord:
+        combined_user_params = dict(req.parameters)
+        if req.flat_shading is not None:
+            combined_user_params["flat_shading"] = req.flat_shading
+        if req.skin_color is not None:
+            combined_user_params["skin_color"] = req.skin_color
+        if req.outfit_color is not None:
+            combined_user_params["outfit_color"] = req.outfit_color
+
+        explicit_budget = req.target_faces if req.target_faces is not None else req.polygon_budget
         # Validate parameters eagerly before queueing so invalid configs return 422 immediately!
         merged_params, resolved_budget, preset = validate_and_merge_parameters(
             category=req.category,
             preset_id=req.preset_id,
             quality_profile=req.quality_profile,
-            user_params=req.parameters,
-            explicit_budget=req.polygon_budget,
+            user_params=combined_user_params,
+            explicit_budget=explicit_budget,
         )
         normalized_req = req.model_copy(
             update={
@@ -377,3 +394,137 @@ class JobManager:
                     self._append_log(job, "failed", job.progress_pct, f"Generation failed: {last_error}")
             finally:
                 self._storage.cleanup_job_workdir(f"{job_id}_try{attempt}")
+
+    async def generate_immediate(
+        self, direct: DirectGenerateRequest
+    ) -> tuple[AssetRecord, io.BytesIO, str]:
+        """Generate a 3D model immediately, return ``(AssetRecord, glb_stream, active_engine)``."""
+        category, preset = resolve_preset_identifier(
+            direct.preset_id or direct.preset,
+            explicit_category=direct.category,
+        )
+        user_params: dict[str, Any] = dict(direct.parameters)
+        user_params["flat_shading"] = direct.flat_shading
+        user_params["skin_color"] = direct.skin_color
+        user_params["outfit_color"] = direct.outfit_color
+
+        merged_params, resolved_budget, _ = validate_and_merge_parameters(
+            category=category,
+            preset_id=preset.id,
+            quality_profile=direct.quality_profile,
+            user_params=user_params,
+            explicit_budget=direct.target_faces,
+        )
+
+        job_id = f"job_sync_{uuid.uuid4().hex[:10]}"
+        asset_id = f"ast_{preset.id}_{direct.seed}_{uuid.uuid4().hex[:8]}"
+        asset_name = direct.name or preset.name
+        mat_preset = (
+            direct.material_preset if direct.material_preset != "default" else preset.material_preset
+        )
+
+        cfg_payload: dict[str, Any] = {
+            "job_id": job_id,
+            "asset_id": asset_id,
+            "asset_name": asset_name,
+            "category": category.value,
+            "preset_id": preset.id,
+            "quality_profile": direct.quality_profile.value,
+            "seed": direct.seed,
+            "polygon_budget": resolved_budget,
+            "target_faces": resolved_budget,
+            "flat_shading": direct.flat_shading,
+            "skin_color": direct.skin_color,
+            "outfit_color": direct.outfit_color,
+            "material_preset": mat_preset,
+            "save_blend": False,
+            "parameters": merged_params,
+        }
+
+        engine = select_generation_engine(self._settings)
+        workdir = self._storage.create_job_workdir(job_id)
+        try:
+            if engine == "blender":
+                cfg_path = workdir / "job_config.json"
+                cfg_path.write_text(json.dumps(cfg_payload, indent=2), encoding="utf-8")
+                gen_res = await run_blender_generation_job(
+                    job_config_path=cfg_path,
+                    output_dir=workdir,
+                    settings=self._settings,
+                )
+                glb_filename = gen_res["glb_filename"]
+                glb_temp_path = workdir / glb_filename
+                glb_bytes = glb_temp_path.read_bytes()
+                glb_stream = io.BytesIO(glb_bytes)
+                active_engine = "blender"
+            else:
+                mem_res = await asyncio.to_thread(generate_glb_in_memory, cfg_payload)
+                glb_stream = mem_res["glb_stream"]
+                glb_bytes = mem_res["glb_bytes"]
+                glb_filename = f"{asset_id}.glb"
+                glb_temp_path = workdir / glb_filename
+                glb_temp_path.write_bytes(glb_bytes)
+                gen_res = {
+                    "success": True,
+                    "generation_engine": mem_res["generation_engine"],
+                    "blender_version": mem_res["blender_version"],
+                    "generation_time_seconds": mem_res["generation_time_seconds"],
+                    "glb_filename": glb_filename,
+                    "glb_size_bytes": len(glb_bytes),
+                    "blend_filename": None,
+                    "blend_size_bytes": None,
+                    "capabilities_used": mem_res["capabilities_used"],
+                    "capabilities_fallback": mem_res["capabilities_fallback"],
+                    "scene_diagnostics": mem_res["scene_diagnostics"],
+                    "reimport_check": mem_res["reimport_check"],
+                }
+                active_engine = "python_procedural"
+
+            stats, validation = validate_generated_asset(
+                glb_path=glb_temp_path,
+                blender_payload=gen_res,
+                category=category,
+                polygon_budget=resolved_budget,
+                max_output_bytes=self._settings.max_output_bytes,
+            )
+            if not validation.valid:
+                raise RuntimeError(f"Generated GLB failed validation: {'; '.join(validation.errors)}")
+
+            now = datetime.now(UTC)
+            asset_record = AssetRecord(
+                id=asset_id,
+                job_id=job_id,
+                name=asset_name,
+                category=category,
+                preset_id=preset.id,
+                quality_profile=direct.quality_profile,
+                seed=direct.seed,
+                polygon_budget=resolved_budget,
+                material_preset=mat_preset,
+                parameters=merged_params,
+                created_at=now,
+                glb_filename=glb_filename,
+                glb_size_bytes=len(glb_bytes),
+                glb_download_url=self._storage.build_download_url(asset_id, "glb"),
+                blend_filename=None,
+                blend_size_bytes=None,
+                blend_download_url=None,
+                metadata_download_url=self._storage.build_download_url(asset_id, "metadata"),
+                capabilities_used=list(gen_res.get("capabilities_used", [])),
+                capabilities_fallback=list(gen_res.get("capabilities_fallback", [])),
+                blender_version=str(gen_res.get("blender_version", "")),
+                generation_time_seconds=float(gen_res.get("generation_time_seconds", 0.0)),
+                stats=stats,
+                validation=validation,
+            )
+
+            meta_filename = f"{asset_id}_metadata.json"
+            (workdir / meta_filename).write_text(
+                asset_record.model_dump_json(indent=2), encoding="utf-8"
+            )
+            self._storage.promote_job_outputs(asset_id, workdir, [glb_filename, meta_filename])
+            self._repo.save_asset(asset_record)
+            glb_stream.seek(0)
+            return asset_record, glb_stream, active_engine
+        finally:
+            self._storage.cleanup_job_workdir(job_id)

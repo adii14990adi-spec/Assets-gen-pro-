@@ -34,6 +34,17 @@ from backend.enums import QualityProfile
 from backend.generator.base import GenerationContext
 
 
+def _parse_hex_rgb_optional(raw: Any) -> tuple[float, float, float] | None:
+    if not isinstance(raw, str):
+        return None
+    s = raw.strip().lstrip("#")
+    if len(s) == 3 and all(c in "0123456789abcdefABCDEF" for c in s):
+        s = "".join(c * 2 for c in s)
+    if len(s) != 6 or not all(c in "0123456789abcdefABCDEF" for c in s):
+        return None
+    return (int(s[0:2], 16) / 255.0, int(s[2:4], 16) / 255.0, int(s[4:6], 16) / 255.0)
+
+
 def _build_anatomical_wire_spec(
     height: float,
     is_female: bool,
@@ -41,6 +52,7 @@ def _build_anatomical_wire_spec(
     shoulder_scale: float,
     hip_scale: float,
     limb_scale: float,
+    t_pose: bool = False,
 ) -> tuple[list[tuple[float, float, float]], list[tuple[int, int]], list[tuple[float, float]], dict[str, tuple[float, float, float]]]:
     """Construct connected anatomical skeleton/skin graph & joint landmarks in meters (-Y forward, +Z up)."""
     s = height / 1.78
@@ -124,7 +136,7 @@ def _build_anatomical_wire_spec(
         n_clav_side = add_node((sx * 0.56, -0.005 * s, z_clavicle), (0.064 * s, 0.058 * s), n_clav, f"{side_prefix}Shoulder")
         n_shoulder = add_node((sx, 0.005 * s, z_sh), (0.068 * s * m_boost, 0.066 * s * m_boost), n_clav_side, f"{side_prefix}UpperArm")
 
-        arm_ang = math.radians(26.0)
+        arm_ang = math.radians(0.0 if t_pose else 26.0)
         dx = side_sign * math.cos(arm_ang)
         dz = -math.sin(arm_ang)
 
@@ -504,15 +516,28 @@ def generate_humanoid_asset(ctx: GenerationContext) -> list[Any]:
     inc_rig = bool(p.get("include_rig", True))
 
     mats = resolve_theme_materials(ctx.material_preset, "tactical_military", ctx.seed, wear_amount=0.3)
+    outfit_rgb_override = _parse_hex_rgb_optional(p.get("outfit_color"))
+    if outfit_rgb_override is not None:
+        mats["primary"] = get_or_create_pbr_material(
+            name=f"Mat_OutfitCustom_{ctx.seed}",
+            base_rgb=outfit_rgb_override,
+            metallic=0.04,
+            roughness=0.48,
+            pattern="fabric",
+            seed=ctx.seed + 3,
+            use_texture=False,
+        )
     rng = np.random.default_rng(ctx.seed)
     skin_tone_shift = float(rng.uniform(-0.04, 0.04))
+    skin_rgb_override = _parse_hex_rgb_optional(p.get("skin_color"))
+    skin_rgb = skin_rgb_override or (
+        float(np.clip(0.68 + skin_tone_shift, 0.35, 0.85)),
+        float(np.clip(0.49 + skin_tone_shift * 0.8, 0.25, 0.72)),
+        float(np.clip(0.37 + skin_tone_shift * 0.6, 0.18, 0.62)),
+    )
     skin_mat = get_or_create_pbr_material(
         name=f"Mat_Skin_{ctx.seed}",
-        base_rgb=(
-            float(np.clip(0.68 + skin_tone_shift, 0.35, 0.85)),
-            float(np.clip(0.49 + skin_tone_shift * 0.8, 0.25, 0.72)),
-            float(np.clip(0.37 + skin_tone_shift * 0.6, 0.18, 0.62)),
-        ),
+        base_rgb=skin_rgb,
         metallic=0.0,
         roughness=0.58,
         pattern="smooth",
@@ -529,6 +554,9 @@ def generate_humanoid_asset(ctx: GenerationContext) -> list[Any]:
         use_texture=True,
     )
 
+    is_t_pose = str(p.get("pose", "")) == "t_pose" or ctx.preset_id == "midpoly_character"
+    flat_shading = bool(p.get("flat_shading", ctx.preset_id == "midpoly_character"))
+
     verts, edges, radii, landmarks = _build_anatomical_wire_spec(
         height=height,
         is_female=is_female,
@@ -536,6 +564,7 @@ def generate_humanoid_asset(ctx: GenerationContext) -> list[Any]:
         shoulder_scale=shoulder_w,
         hip_scale=hip_w,
         limb_scale=limb_s,
+        t_pose=is_t_pose,
     )
 
     wire_mesh = bpy.data.meshes.new(f"{ctx.asset_name}_Wire")
@@ -545,7 +574,7 @@ def generate_humanoid_asset(ctx: GenerationContext) -> list[Any]:
 
     skin_mod = body_obj.modifiers.new(name="AnatomicalSkin", type="SKIN")
     skin_mod.branch_smoothing = 0.28
-    skin_mod.use_smooth_shade = True
+    skin_mod.use_smooth_shade = not flat_shading
 
     sv_data = body_obj.data.skin_vertices[0].data
     sv_data[0].use_root = True

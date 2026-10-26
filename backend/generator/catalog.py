@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 from functools import lru_cache
 from typing import Any
 
@@ -18,6 +19,35 @@ from backend.schemas import (
     PresetInfo,
     QualityProfile,
 )
+
+_HEX_COLOR_RE = re.compile(r"^#?(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+SHARED_SHADING_SPECS: list[ParameterSpec] = [
+    ParameterSpec(
+        name="flat_shading",
+        label="Flat Faceted Shading",
+        type="bool",
+        default=True,
+        description="Unmerge vertices and compute crisp per-face normals for a faceted mid-poly look.",
+        group="Shading & Colors",
+    ),
+    ParameterSpec(
+        name="skin_color",
+        label="Skin / Secondary Hex Color",
+        type="color",
+        default="",
+        description="Optional #RRGGBB override applied directly to vertex/face colors.",
+        group="Shading & Colors",
+    ),
+    ParameterSpec(
+        name="outfit_color",
+        label="Outfit / Primary Hex Color",
+        type="color",
+        default="",
+        description="Optional #RRGGBB override applied directly to vertex/face colors.",
+        group="Shading & Colors",
+    ),
+]
 
 MATERIAL_PRESET_OPTIONS = [
     ParameterOption(value="default", label="Preset Default"),
@@ -142,12 +172,34 @@ ASSET_TYPES: dict[AssetCategory, AssetTypeInfo] = {
                 group="Loadout & Equipment",
             ),
             ParameterSpec(
+                name="pose",
+                label="Character Rest Pose",
+                type="select",
+                default="a_pose",
+                group="Anatomy & Proportions",
+                options=[
+                    ParameterOption(value="t_pose", label="Symmetrical Horizontal T-Pose"),
+                    ParameterOption(value="a_pose", label="Relaxed Combat A-Pose"),
+                ],
+            ),
+            ParameterSpec(
+                name="ponytail_length",
+                label="Ponytail Length Scale",
+                type="float",
+                default=1.0,
+                min_value=0.4,
+                max_value=1.6,
+                step=0.05,
+                group="Loadout & Equipment",
+            ),
+            ParameterSpec(
                 name="include_rig",
                 label="Humanoid Armature & Normalized Skin Weights",
                 type="bool",
                 default=True,
                 group="Rigging & Export",
             ),
+            *SHARED_SHADING_SPECS,
         ],
     ),
     AssetCategory.ARCHITECTURE: AssetTypeInfo(
@@ -272,6 +324,7 @@ ASSET_TYPES: dict[AssetCategory, AssetTypeInfo] = {
                 step=0.1,
                 group="Ornament & Roof",
             ),
+            *SHARED_SHADING_SPECS,
         ],
     ),
     AssetCategory.ENVIRONMENT: AssetTypeInfo(
@@ -360,6 +413,7 @@ ASSET_TYPES: dict[AssetCategory, AssetTypeInfo] = {
                 step=0.05,
                 group="Scatter & Biome",
             ),
+            *SHARED_SHADING_SPECS,
         ],
     ),
     AssetCategory.PROPS: AssetTypeInfo(
@@ -439,6 +493,7 @@ ASSET_TYPES: dict[AssetCategory, AssetTypeInfo] = {
                 step=0.05,
                 group="Hard-Surface Detail",
             ),
+            *SHARED_SHADING_SPECS,
         ],
     ),
 }
@@ -472,8 +527,50 @@ def list_presets(category: AssetCategory | None = None) -> list[PresetInfo]:
     return all_presets
 
 
+PRESET_SHORTHAND_ALIASES: dict[str, str] = {
+    "midpoly_character": "midpoly_character",
+    "character": "midpoly_character",
+    "humanoid": "midpoly_character",
+    "female_tpose": "midpoly_character",
+    "stylized_female_tpose": "midpoly_character",
+    "architecture": "rajasthani_haveli",
+    "building": "rajasthani_haveli",
+    "haveli": "rajasthani_haveli",
+    "fort": "rajput_fort_bastion",
+    "terrain": "aravalli_ridge_terrain",
+    "environment": "aravalli_ridge_terrain",
+    "landscape": "aravalli_ridge_terrain",
+    "island": "battle_royale_island",
+    "tree": "stylized_banyan_tree",
+    "prop": "br_supply_crate",
+    "props": "br_supply_crate",
+    "crate": "br_supply_crate",
+    "barrel": "explosive_fuel_barrel",
+    "vehicle": "desert_recon_buggy",
+}
+
+
 def get_preset(preset_id: str) -> PresetInfo | None:
     return _load_presets_from_disk().get(preset_id)
+
+
+def resolve_preset_identifier(
+    preset_or_id: str,
+    explicit_category: AssetCategory | None = None,
+) -> tuple[AssetCategory, PresetInfo]:
+    """Resolve either a shorthand preset key (e.g. ``'midpoly_character'``, ``'terrain'``) or full preset ID."""
+    cleaned = preset_or_id.strip().lower()
+    mapped_id = PRESET_SHORTHAND_ALIASES.get(cleaned, cleaned)
+    preset = get_preset(mapped_id)
+    if preset is None:
+        raise ParameterValidationError(
+            f"Unknown preset '{preset_or_id}'. Supported shorthands: {sorted(PRESET_SHORTHAND_ALIASES.keys())}."
+        )
+    if explicit_category is not None and preset.category != explicit_category:
+        raise ParameterValidationError(
+            f"Preset '{preset.id}' belongs to category '{preset.category.value}', not '{explicit_category.value}'."
+        )
+    return preset.category, preset
 
 
 def validate_and_merge_parameters(
@@ -535,6 +632,21 @@ def validate_and_merge_parameters(
                     f"Parameter '{key}' must be one of {allowed}, got {raw_val!r}."
                 )
             merged[key] = raw_val
+        elif spec.type == "color":
+            if not isinstance(raw_val, str):
+                raise ParameterValidationError(f"Parameter '{key}' must be a hex color string.")
+            cleaned_hex = raw_val.strip()
+            if cleaned_hex == "":
+                merged[key] = ""
+            elif not _HEX_COLOR_RE.match(cleaned_hex):
+                raise ParameterValidationError(
+                    f"Parameter '{key}'={raw_val!r} is not a valid hex color (#RRGGBB or #RGB)."
+                )
+            else:
+                h = cleaned_hex.lstrip("#")
+                if len(h) == 3:
+                    h = "".join(c * 2 for c in h)
+                merged[key] = f"#{h.lower()}"
         else:
             merged[key] = raw_val
 

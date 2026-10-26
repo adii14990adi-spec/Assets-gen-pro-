@@ -4,27 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "procedural-3d-asset-studio"
-version = "1.0.0"
-description = "Procedural 3D Asset Generator Studio for Godot 4 Android Battle Royale pipelines using Python, Blender 4.2 LTS, NumPy, Geometry Nodes, and React Three Fiber."
+version = "1.1.0"
+description = "100% code-driven Python 3D mid-poly procedural asset generator (NumPy, SciPy, Trimesh + optional Blender 4.2 LTS) with FastAPI and interactive Three.js Web Studio."
 readme = "README.md"
-# Blender 4.2 LTS (`bpy==4.2.23`) ships CPython 3.11 wheels only, and
-# numpy/scipy source builds fail without a Fortran compiler on newer
-# interpreters — pin the supported window to 3.11–3.12 (deploy target: 3.11.11).
 requires-python = ">=3.11,<3.13"
 license = { text = "GPL-3.0-or-later" }
-# Binary-wheel-safe dependency ranges — kept in exact sync with
-# requirements.txt so `pip install --only-binary=:all:` never compiles
-# numpy/scipy from source (which would require gfortran).
 dependencies = [
-    "fastapi>=0.115.0,<0.116.0",
-    "uvicorn[standard]>=0.34.0,<0.40.0",
-    "pydantic>=2.11.0,<3.0.0",
-    "pydantic-settings>=2.9.1,<3.0.0",
-    "python-multipart>=0.0.20,<0.1.0",
-    "httpx>=0.28.0,<0.29.0",
-    "sqlalchemy>=2.0.36,<2.1.0",
-    "aiosqlite>=0.21.0,<0.22.0",
-    "numpy>=1.26.4,<2.2.0",
+    "fastapi>=0.115.0,<1.0.0",
+    "uvicorn[standard]>=0.34.0,<1.0.0",
+    "pydantic>=2.10.0,<3.0.0",
+    "pydantic-settings>=2.7.0,<3.0.0",
+    "python-multipart>=0.0.18,<1.0.0",
+    "httpx>=0.27.0,<1.0.0",
+    "sqlalchemy>=2.0.30,<2.1.0",
+    "aiosqlite>=0.20.0,<1.0.0",
+    "numpy>=1.26.4,<2.0.0",
     "scipy>=1.11.4,<1.16.0",
     "trimesh>=4.0.0,<5.0.0",
     "networkx>=3.2,<4.0.0",
@@ -32,21 +26,16 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.3.5,<9.0.0",
-    "pytest-asyncio>=0.26.0,<0.27.0",
-    "ruff>=0.11.6,<1.0.0",
+    "pytest>=8.3.0,<9.0.0",
+    "pytest-asyncio>=0.25.0,<1.0.0",
+    "ruff>=0.11.0,<1.0.0",
 ]
-# Isolated headless Blender 4.2 LTS runtime — install ONLY into a dedicated
-# Python 3.11 environment via `python scripts/setup_blender_runtime.py`,
-# never into the FastAPI web process environment.
 blender = [
-    "bpy==4.2.23",
-    "numpy==1.26.4",
+    "bpy>=4.2.0,<4.3.0",
+    "numpy>=1.26.4,<2.0.0",
 ]
-# Optional mesh-inspection accelerators (runtime-probed; see
-# requirements-optional.txt). Excluded from the default web image.
 mesh = [
-    "pymeshlab==2023.12.post3",
+    "pymeshlab>=2023.12",
 ]
 
 [tool.setuptools.packages.find]
@@ -55,6 +44,7 @@ include = ["backend*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 addopts = "-q"
 
 [tool.ruff]

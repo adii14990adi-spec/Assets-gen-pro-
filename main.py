@@ -1,11 +1,4 @@
-"""Alternate ASGI entrypoint — re-exports the app from root `app.py`.
-
-Exists so hosts/tooling that default to ``uvicorn main:app`` work out of
-the box alongside ``uvicorn app:app`` (Render start command) and
-``uvicorn backend.main:app``:
-
-    uvicorn main:app --host 0.0.0.0 --port $PORT
-"""
+"""Root ASGI entrypoint forwarding `app` from `app.py` for Render (`uvicorn main:app`)."""
 
 from __future__ import annotations
 

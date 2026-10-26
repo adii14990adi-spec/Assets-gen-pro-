@@ -70,6 +70,10 @@ class GenerateAssetRequest(BaseModel):
     seed: int = Field(default=42, ge=0, le=2_147_483_647)
     polygon_budget: int | None = Field(default=None, ge=100, le=200_000)
     material_preset: str = Field(default="default", min_length=2, max_length=48, pattern=r"^[a-z0-9_]+$")
+    target_faces: int | None = Field(default=None, ge=100, le=200_000)
+    flat_shading: bool | None = Field(default=None)
+    skin_color: str | None = Field(default=None, max_length=16)
+    outfit_color: str | None = Field(default=None, max_length=16)
     save_blend: bool = Field(default=True, description="Also save native .blend project file")
     execution_mode: ExecutionMode = Field(default=ExecutionMode.LIVE)
     parameters: dict[str, float | int | bool | str] = Field(default_factory=dict)
@@ -86,6 +90,49 @@ class GenerateAssetRequest(BaseModel):
             if forbidden in cleaned:
                 raise ValueError(f"Asset name contains disallowed character sequence: {forbidden!r}")
         return cleaned
+
+
+class DirectGenerateRequest(BaseModel):
+    """Immediate procedural 3D generation payload supporting shorthand presets & direct hex colors."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    preset: str = Field(
+        default="midpoly_character",
+        min_length=2,
+        max_length=64,
+        pattern=r"^[a-zA-Z0-9_-]+$",
+        description="Preset or category shorthand ('midpoly_character', 'architecture', 'terrain', 'prop', or preset ID).",
+    )
+    preset_id: str | None = Field(default=None, min_length=2, max_length=64, pattern=r"^[a-z0-9_]+$")
+    category: AssetCategory | None = None
+    target_faces: int = Field(default=1800, ge=100, le=200_000)
+    flat_shading: bool = Field(default=True)
+    skin_color: str = Field(default="#e6a88a", max_length=16)
+    outfit_color: str = Field(default="#3b82f6", max_length=16)
+    seed: int = Field(default=42, ge=0, le=2_147_483_647)
+    quality_profile: QualityProfile = QualityProfile.OPTIMIZED_MID_POLY
+    material_preset: str = Field(default="default", min_length=2, max_length=48, pattern=r"^[a-z0-9_]+$")
+    name: str | None = Field(default=None, max_length=80)
+    response_format: Literal["json", "glb"] | None = None
+    sync: bool = Field(default=True)
+    parameters: dict[str, float | int | bool | str] = Field(default_factory=dict)
+
+    @field_validator("name")
+    @classmethod
+    def sanitize_direct_name(cls, value: str | None) -> str | None:
+        return GenerateAssetRequest.sanitize_name(value)
+
+    @field_validator("skin_color", "outfit_color")
+    @classmethod
+    def validate_hex(cls, value: str) -> str:
+        cleaned = value.strip()
+        h = cleaned.lstrip("#")
+        if len(h) == 3 and all(c in "0123456789abcdefABCDEF" for c in h):
+            h = "".join(c * 2 for c in h)
+        if len(h) != 6 or not all(c in "0123456789abcdefABCDEF" for c in h):
+            raise ValueError(f"Expected hex color (#RRGGBB or #RGB), got {value!r}.")
+        return f"#{h.lower()}"
 
 
 class BoundingBox3D(BaseModel):
