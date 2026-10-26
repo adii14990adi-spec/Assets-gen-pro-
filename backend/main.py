@@ -1,7 +1,9 @@
 """FastAPI Application — Procedural 3D Asset Generator Studio.
 
 Exposes validated REST endpoints, Server-Sent Events (SSE), and WebSocket job streams
-connecting the interactive React Three Fiber studio to the isolated Blender 4.2 LTS worker.
+connecting the interactive React Three Fiber studio (or the built-in fallback Three.js
+studio when `frontend/dist` is absent) to the dual-engine generation backend:
+Blender 4.2 LTS when installed, otherwise the pure-Python NumPy+Trimesh engine.
 """
 
 from __future__ import annotations
@@ -28,13 +30,15 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend import __version__
+from backend.blender.runtime import describe_generation_engine
 from backend.config import REPO_ROOT, Settings, get_settings
 from backend.database import StudioRepository
 from backend.enums import AssetCategory, ExecutionMode, JobStatus
+from backend.fallback_ui import FALLBACK_INDEX_HTML
 from backend.generator.base import ParameterValidationError
 from backend.generator.catalog import (
     MATERIAL_PRESET_OPTIONS,
@@ -124,14 +128,26 @@ def create_app(custom_settings: Settings | None = None) -> FastAPI:
     async def get_health() -> dict[str, Any]:
         caps = state.capabilities.list_capabilities()
         blender_core = next((c for c in caps if c.id == "blender_core"), None)
+        python_engine = next((c for c in caps if c.id == "python_fallback_engine"), None)
+        engine = describe_generation_engine(state.settings)
+        blender_ok = bool(blender_core and blender_core.available)
+        python_ok = bool(python_engine and python_engine.verified)
+        # The service is healthy when EITHER engine can generate: Blender for
+        # full-fidelity workstations/VMs, or the pure-Python fallback that
+        # makes hosts without Blender (Render Native Python) fully usable.
+        healthy = blender_ok or python_ok
         return {
-            "status": "ok" if (blender_core and blender_core.available) else "degraded",
+            "status": "ok" if healthy else "degraded",
             "service": state.settings.app_name,
             "version": __version__,
             "operating_mode": state.settings.operating_mode,
             "github_dispatch_configured": bool(state.settings.github_dispatch_token.strip()),
-            "blender_available": bool(blender_core and blender_core.available),
+            "configured_engine": engine["configured_engine"],
+            "generation_engine": engine["generation_engine"],
+            "blender_available": blender_ok,
             "blender_version": blender_core.version if blender_core else None,
+            "blender_runtime": engine["blender_runtime"],
+            "python_fallback_available": python_ok,
             "active_jobs": state.job_manager.active_count,
             "queued_jobs": state.job_manager.queued_count,
             "capabilities_verified": sum(1 for c in caps if c.verified),
@@ -383,10 +399,22 @@ def create_app(custom_settings: Settings | None = None) -> FastAPI:
                 "validation": report.model_dump(mode="json"),
             }
 
-    # Serve production static frontend build if `frontend/dist` exists
+    # Frontend serving strategy:
+    #   1. If the React production build exists (`frontend/dist`), serve it.
+    #   2. Otherwise serve the self-contained fallback Three.js studio so
+    #      `GET /` ALWAYS loads a working interactive 3D viewer (e.g. on
+    #      Render Native Python, where only `requirements.txt` is installed).
     dist_dir = REPO_ROOT / "frontend" / "dist"
     if dist_dir.exists() and (dist_dir / "index.html").exists():
         app.mount("/", StaticFiles(directory=str(dist_dir), html=True), name="frontend")
+    else:
+
+        @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+        async def serve_fallback_studio() -> HTMLResponse:
+            return HTMLResponse(
+                content=FALLBACK_INDEX_HTML,
+                headers={"Cache-Control": "no-cache"},
+            )
 
     return app
 

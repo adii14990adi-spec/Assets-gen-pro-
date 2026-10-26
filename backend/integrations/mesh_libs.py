@@ -1,4 +1,4 @@
-"""Optional Python mesh-processing library adapters (trimesh, pymeshlab, Open3D)."""
+"""Python mesh/generation adapters: fallback engine, trimesh, pymeshlab, Open3D."""
 
 from __future__ import annotations
 
@@ -177,4 +177,62 @@ class Open3DAdapter(CapabilityAdapter):
                 applicable_categories=self.applicable_categories,
                 fallback_strategy=self.fallback_strategy,
                 status_message=f"Optional dependency not installed ({type(exc).__name__}); using {self.fallback_strategy}.",
+            )
+
+
+class PythonFallbackAdapter(CapabilityAdapter):
+    """Pure-Python NumPy+Trimesh generation engine (Blender-free fallback)."""
+
+    capability_id = "python_fallback_engine"
+    display_name = "Pure-Python Fallback 3D Engine (NumPy + Trimesh)"
+    kind = "python_library"
+    license_name = "MIT (Trimesh) / BSD-3-Clause (NumPy)"
+    applicable_categories = [
+        AssetCategory.PROPS,
+        AssetCategory.ARCHITECTURE,
+        AssetCategory.ENVIRONMENT,
+        AssetCategory.HUMANOID,
+    ]
+    fallback_strategy = "Blender 4.2 LTS BMesh/Geometry Nodes pipeline when a Blender runtime is installed"
+
+    def detect(self) -> CapabilityStatus:
+        try:
+            from backend.fallback.engine import verify_python_engine
+
+            ok, message = verify_python_engine()
+            version = None
+            if ok:
+                import numpy
+                import trimesh
+
+                version = f"trimesh {trimesh.__version__} / numpy {numpy.__version__}"
+            return CapabilityStatus(
+                id=self.capability_id,
+                name=self.display_name,
+                kind=self.kind,
+                available=ok,
+                verified=ok,
+                version=version,
+                license=self.license_name,
+                applicable_categories=self.applicable_categories,
+                fallback_strategy=self.fallback_strategy,
+                status_message=(
+                    f"{message} Generates all presets without Blender (used automatically "
+                    "on hosts without a Blender runtime, e.g. Render Native Python)."
+                    if ok
+                    else f"Unavailable ({message}); Blender runtime required for generation."
+                ),
+            )
+        except Exception as exc:
+            return CapabilityStatus(
+                id=self.capability_id,
+                name=self.display_name,
+                kind=self.kind,
+                available=False,
+                verified=False,
+                version=None,
+                license=self.license_name,
+                applicable_categories=self.applicable_categories,
+                fallback_strategy=self.fallback_strategy,
+                status_message=f"Unavailable ({exc}); Blender runtime required for generation.",
             )

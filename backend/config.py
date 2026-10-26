@@ -29,6 +29,18 @@ class Settings(BaseSettings):
         default="live", validation_alias="STUDIO_OPERATING_MODE"
     )
 
+    # Dual-engine generation strategy:
+    #   "auto"    (default) — Blender 4.2 LTS when a `blender` CLI, isolated
+    #             `bpy` runtime, or importable `bpy` module is detected;
+    #             otherwise the pure-Python NumPy + Trimesh fallback engine.
+    #             This is what makes Render Native Python (no Blender binary)
+    #             work with zero configuration.
+    #   "blender" — require the Blender/BMesh pipeline; fail fast if absent.
+    #   "python"  — always use the pure-Python fallback engine.
+    generation_engine: Literal["auto", "blender", "python"] = Field(
+        default="auto", validation_alias="STUDIO_GENERATION_ENGINE"
+    )
+
     # Blender execution paths
     blender_executable: str = Field(default="", validation_alias="BLENDER_EXECUTABLE")
     blender_python_executable: str = Field(

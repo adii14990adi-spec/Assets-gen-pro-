@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""Command-line procedural 3D asset generator & validator (used in CI, workflow_dispatch, and local CLI)."""
+"""Command-line procedural 3D asset generator & validator (CI, workflow_dispatch, local CLI).
+
+Dual-engine: uses Blender 4.2 LTS when detected, otherwise the pure-Python
+NumPy+Trimesh fallback engine. Force an engine with `--engine` or the
+`STUDIO_GENERATION_ENGINE` environment variable.
+"""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
 import json
+import os
 import pathlib
 import sys
 import uuid
@@ -21,6 +27,8 @@ from backend.validation.validator import validate_generated_asset  # noqa: E402
 
 
 async def _run_cli(args: argparse.Namespace) -> int:
+    if args.engine:
+        os.environ["STUDIO_GENERATION_ENGINE"] = args.engine
     category = AssetCategory(args.category)
     quality = QualityProfile(args.quality)
     user_params = json.loads(args.params) if args.params else {}
@@ -108,7 +116,7 @@ async def _run_cli(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate and validate a procedural 3D asset via Blender.")
+    parser = argparse.ArgumentParser(description="Generate and validate a procedural 3D asset (Blender or Python fallback engine).")
     parser.add_argument("--category", required=True, choices=[c.value for c in AssetCategory])
     parser.add_argument("--preset", required=True)
     parser.add_argument(
@@ -123,6 +131,12 @@ def main() -> int:
     parser.add_argument("--asset-id", default=None)
     parser.add_argument("--params", default=None, help="Optional JSON object overriding preset parameters")
     parser.add_argument("--save-blend", action="store_true")
+    parser.add_argument(
+        "--engine",
+        default=None,
+        choices=["auto", "blender", "python"],
+        help="Generation engine (default: STUDIO_GENERATION_ENGINE env or auto-detect)",
+    )
     parser.add_argument("--output-dir", type=pathlib.Path, default=pathlib.Path("artifacts_out"))
     args = parser.parse_args()
     return asyncio.run(_run_cli(args))

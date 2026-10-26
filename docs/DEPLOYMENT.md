@@ -57,3 +57,92 @@ Required for real-time, interactive parameter tweaking and sub-second/multi-seco
 - **Path Traversal Prevention**: `ArtifactStorage` validates all job and asset IDs against `^[A-Za-z0-9_-]{3,80}$` and verifies `.resolve()` remains strictly inside `storage_data/`.
 - **Process Isolation & Resource Bounds**: Blender runs in its own POSIX process group (`os.setsid`) with `RLIMIT_CPU`, wall-clock timeouts (`STUDIO_JOB_TIMEOUT_SECONDS`), process-group termination on cancellation, and bounded output/upload byte caps (`STUDIO_MAX_OUTPUT_BYTES`, `STUDIO_MAX_UPLOAD_BYTES`).
 - **Token Protection**: Privileged actions (`DELETE /api/assets/{id}` and Mode A workflow dispatches) enforce `X-API-Key` when `STUDIO_API_KEY` is configured, and `GITHUB_DISPATCH_TOKEN` is never exposed to browser clients.
+
+---
+
+## Mode C: Render (Free Tier) — Native Python & Docker
+
+### Python version pinning (fixes `gfortran` source-build failures)
+
+Render selects its newest Python (3.14+) when the version is unpinned. At that
+version, `numpy`/`scipy` pins that lack pre-compiled wheels are built from
+source and fail with `ERROR: Unknown compiler(s): [['gfortran']]`. This repo
+pins **Python 3.11.11** in four places so every deploy path agrees:
+
+| Location | Value |
+| --- | --- |
+| `.python-version` | `3.11.11` |
+| `runtime.txt` | `python-3.11.11` |
+| `render.yaml` env | `PYTHON_VERSION: "3.11.11"` |
+| `pyproject.toml` | `requires-python = ">=3.11,<3.13"` |
+
+`requirements.txt` uses wheel-safe ranges (`numpy>=1.26.4,<2.2.0`,
+`scipy>=1.11.4,<1.16.0`, `trimesh>=4.0.0,<5.0.0`, `fastapi>=0.115.0`,
+`uvicorn[standard]>=0.34.0`, …). CI proves `pip install --only-binary=:all:`
+succeeds, so no compiler is ever needed at install time. `pymeshlab` and
+`open3d` are optional runtime-probed accelerators kept in
+`requirements-optional.txt` (their Qt/OpenGL stacks break slim deploys).
+
+### Render Native Python (Blueprint)
+
+`render.yaml` provisions a free web service with:
+
+- **Build**: `pip install --upgrade pip setuptools wheel && pip install --prefer-binary -r requirements.txt`
+- **Start**: `uvicorn app:app --host 0.0.0.0 --port $PORT` (`uvicorn main:app` and `uvicorn backend.main:app` also work — root `app.py`/`main.py` both re-export the same FastAPI app)
+- **Health check**: `GET /api/health` → `{"status": "ok", "generation_engine": "python_fallback", …}`
+
+Because the Render Python runtime ships no `blender` binary, the
+**dual-engine dispatcher** (`backend/blender/runtime.py`,
+`STUDIO_GENERATION_ENGINE=auto`) routes generation to the pure-Python
+NumPy+Trimesh engine (`backend/fallback/`). It procedurally builds all 17
+presets (characters, Rajasthani architecture, closed-solid terrain, props),
+decimates to the requested polygon budget via deterministic vertex
+clustering, facets flat-shaded normals, assigns triplanar UVs + per-face
+vertex colors + named PBR materials, and serializes a binary glTF 2.0
+`.glb` that passes the same independent validator as Blender output.
+Blender-only extras are reported honestly in `capabilities_fallback`:
+humanoids are static A-pose meshes (no armature skinning) and no native
+`.blend` file is produced (`blend_filename: null`, download returns 404).
+
+If `frontend/dist` is not built, `GET /` serves a **self-contained fallback
+Three.js studio** (`backend/fallback_ui.py`) with preset selection, live
+generation progress, an orbitable GLB viewport, mesh stats, library, and
+downloads — so a bare `pip install` deploy is fully usable.
+
+Free-tier caveats: ~512 MB RAM (blueprint sets `STUDIO_MAX_CONCURRENT_JOBS=1`),
+cold starts after inactivity, and an **ephemeral filesystem** — assets in
+`storage_data/` reset on restart. Attach a persistent disk (paid) or publish
+GLBs to S3/R2 via `STUDIO_PUBLIC_STORAGE_BASE_URL` for durable hosting.
+
+### Render Docker (full Blender engine)
+
+The production `Dockerfile` is multi-stage:
+
+1. `frontend-build` — Node 22 builds the React Three Fiber studio.
+2. `blender-runtime` — Python 3.11-slim + OpenGL/X11 libs; runs
+   `scripts/setup_blender_runtime.py` to create the isolated headless
+   **Blender 4.2 LTS** (`bpy==4.2.23`) venv at `/opt/blender-runtime`.
+3. `runtime-base` → `runtime` (default) — FastAPI + built frontend +
+   Blender runtime; `BLENDER_PYTHON_EXECUTABLE` points at the isolated
+   venv, so auto-detection selects the Blender/BMesh/Geometry Nodes
+   pipeline (skinned humanoids + `.blend` exports included).
+4. `runtime-lite` (`--target runtime-lite`) — the same service without
+   Blender, for fast/small deploys on the Python fallback engine.
+
+To deploy via the blueprint, switch the service to the commented Docker
+block in `render.yaml` (or create a Docker web service in the dashboard).
+Expect a large first build (~2 GB image); the free tier build is slow but
+cached afterwards, and CI verifies the `runtime-lite` image end-to-end.
+
+### GitHub Pages (optional static frontend)
+
+`actions/configure-pages` returns `HttpError: Not Found — Get Pages site
+failed` until Pages is enabled **once** in repository settings:
+**Settings → Pages → Build and deployment → Source: GitHub Actions**.
+The CI `pages` job treats that state as a warning, not a failure
+(`continue-on-error` on the configure step + job, deploy steps gated on
+its outcome), so build/test jobs stay green either way. After enabling
+Pages, pushes to `main` publish the frontend under
+`https://<owner>.github.io/<repo>/`; set the repository variable
+`PAGES_API_BASE_URL` to your live backend (e.g. the Render URL) so the
+static studio can reach the generation API.
