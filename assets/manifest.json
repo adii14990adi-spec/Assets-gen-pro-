@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-26T10:50:09Z",
+  "generated_at": "2026-10-26T10:52:23Z",
   "generator": "scripts/build_all_assets.py",
   "engine": "numpy 2.4.6 | scipy 1.17.1 | trimesh 5.2.0 | AssetsGenPro-codegen/2.0",
   "repository_url": "https://github.com/adii14990adi-spec/Assets-gen-pro-",
-  "commit": "aa2e179f06b941417bd8562d034e2f202e883594",
+  "commit": "7102d1eb8765aedaabc803d52dda2ff05de0d987",
   "default_branch": "main",
   "asset_count": 18,
   "categories": [
@@ -49,7 +49,7 @@
       "triangle_count": 15156,
       "file_size_kb": 1790.82,
       "file_size_bytes": 1833804,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Detailed mid-poly Battle Royale squad leader with connected anatomical body, plate carrier armor vest, tactical backpack, boots, clothing, hair, and full humanoid armature.",
       "tags": [
         "character",
@@ -70,7 +70,7 @@
         "z": 0.485
       },
       "seed": 1727,
-      "generation_seconds": 0.19,
+      "generation_seconds": 0.215,
       "glb_version": 2,
       "has_vertex_colors": true,
       "has_uvs": true
@@ -86,7 +86,7 @@
       "triangle_count": 13280,
       "file_size_kb": 1569.75,
       "file_size_bytes": 1607420,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Connected anatomical female scout character with athletic proportions, 5-finger hands, fitted recon attire, boots, sculpted hair, and normalized skinning.",
       "tags": [
         "character",
@@ -107,7 +107,7 @@
         "z": 0.4479
       },
       "seed": 1727,
-      "generation_seconds": 0.15,
+      "generation_seconds": 0.145,
       "glb_version": 2,
       "has_vertex_colors": true,
       "has_uvs": true
@@ -123,7 +123,7 @@
       "triangle_count": 12884,
       "file_size_kb": 1521.28,
       "file_size_bytes": 1557788,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Connected anatomical male combatant mesh with articulated 5-finger hands, tactical shirt & cargo trousers, combat boots, hair, and Godot 4 Humanoid rig.",
       "tags": [
         "character",
@@ -144,7 +144,7 @@
         "z": 0.3599
       },
       "seed": 1727,
-      "generation_seconds": 0.147,
+      "generation_seconds": 0.141,
       "glb_version": 2,
       "has_vertex_colors": true,
       "has_uvs": true
@@ -160,7 +160,7 @@
       "triangle_count": 1424,
       "file_size_kb": 200.14,
       "file_size_bytes": 204948,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Articulated mid-poly stylized female character in a symmetrical horizontal T-pose with sculpted head, curved ponytail hair, neck, athletic sports top, toned waist, shorts/pelvis, upper/lower arms, hands, thighs, calves, and sneakers.",
       "tags": [
         "character",
@@ -182,7 +182,7 @@
         "z": 0.5082
       },
       "seed": 1727,
-      "generation_seconds": 0.212,
+      "generation_seconds": 0.211,
       "glb_version": 2,
       "has_vertex_colors": true,
       "has_uvs": true
@@ -198,7 +198,7 @@
       "triangle_count": 1884,
       "file_size_kb": 231.92,
       "file_size_bytes": 237484,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Grand Indian fortified Pol gate flanked by octagonal buttress towers, pointed cusped arch portal, studded timber doors, and upper guard gallery.",
       "tags": [
         "rajasthani",
@@ -235,7 +235,7 @@
       "triangle_count": 1792,
       "file_size_kb": 220.02,
       "file_size_bytes": 225304,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Walkable multi-span stone arch bridge with triangular cutwater piers, vaulted masonry arches, paved roadway deck, and parapet walls.",
       "tags": [
         "bridge",
@@ -255,7 +255,7 @@
         "z": 6.528
       },
       "seed": 1727,
-      "generation_seconds": 0.105,
+      "generation_seconds": 0.107,
       "glb_version": 2,
       "has_vertex_colors": true,
       "has_uvs": true
@@ -271,7 +271,7 @@
       "triangle_count": 2516,
       "file_size_kb": 313.86,
       "file_size_bytes": 321388,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Enterable multi-story pink sandstone Haveli featuring cusped arched portals, cantilevered Jharokha balconies, sloped Chhajja eaves, and Kangura rooftop battlements.",
       "tags": [
         "rajasthani",
@@ -292,7 +292,7 @@
         "z": 8.9495
       },
       "seed": 1727,
-      "generation_seconds": 0.124,
+      "generation_seconds": 0.126,
       "glb_version": 2,
       "has_vertex_colors": true,
       "has_uvs": true
@@ -308,7 +308,7 @@
       "triangle_count": 876,
       "file_size_kb": 114.52,
       "file_size_bytes": 117272,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Monumental battered stone fort curtain wall with semi-octagonal watch bastion, arrow-slit embrasures, arched gate passage, and merlon crenellations.",
       "tags": [
         "rajasthani",
@@ -345,7 +345,7 @@
       "triangle_count": 2376,
       "file_size_kb": 291.9,
       "file_size_bytes": 298908,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Elevated Rajasthani marble & sandstone octagonal Chhatri pavilion with stepped plinth, 8 faceted pillars, scalloped arches, chhajja, and lotus dome.",
       "tags": [
         "rajasthani",
@@ -366,7 +366,7 @@
         "z": 7.072
       },
       "seed": 1727,
-      "generation_seconds": 0.076,
+      "generation_seconds": 0.078,
       "glb_version": 2,
       "has_vertex_colors": true,
       "has_uvs": true
@@ -382,7 +382,7 @@
       "triangle_count": 4100,
       "file_size_kb": 488.5,
       "file_size_bytes": 500220,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Multi-octave ridged rocky hill & plateau chunk with terraced strata, walkable slopes, and Geometry Nodes boulder scatter.",
       "tags": [
         "terrain",
@@ -419,7 +419,7 @@
       "triangle_count": 4080,
       "file_size_kb": 487.35,
       "file_size_bytes": 499048,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Complete surrounded island terrain chunk featuring sandy coastal beaches, interior tactical plateaus, central peak, and surrounding water rim.",
       "tags": [
         "island",
@@ -439,7 +439,7 @@
         "z": 48.6
       },
       "seed": 1727,
-      "generation_seconds": 0.056,
+      "generation_seconds": 0.057,
       "glb_version": 2,
       "has_vertex_colors": true,
       "has_uvs": true
@@ -455,7 +455,7 @@
       "triangle_count": 2372,
       "file_size_kb": 284.91,
       "file_size_bytes": 291748,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Mid-poly game tree with organic gnarled trunk, aerial prop roots, spreading primary limbs, and layered mobile-friendly canopy clusters.",
       "tags": [
         "tree",
@@ -475,7 +475,7 @@
         "z": 7.9326
       },
       "seed": 1727,
-      "generation_seconds": 0.041,
+      "generation_seconds": 0.042,
       "glb_version": 2,
       "has_vertex_colors": true,
       "has_uvs": true
@@ -491,7 +491,7 @@
       "triangle_count": 3292,
       "file_size_kb": 391.61,
       "file_size_bytes": 401008,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "S-curve carved river canyon cutting through rocky banks with shallow tactical ford shoals and translucent water channel mesh.",
       "tags": [
         "river",
@@ -511,7 +511,7 @@
         "z": 28.1475
       },
       "seed": 1727,
-      "generation_seconds": 0.051,
+      "generation_seconds": 0.052,
       "glb_version": 2,
       "has_vertex_colors": true,
       "has_uvs": true
@@ -527,7 +527,7 @@
       "triangle_count": 2776,
       "file_size_kb": 331.07,
       "file_size_bytes": 339016,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Layered sedimentary sandstone cliff formation and tactical boulder cluster for sniper cover and natural chokepoints.",
       "tags": [
         "rocks",
@@ -547,7 +547,7 @@
         "z": 7.0
       },
       "seed": 1727,
-      "generation_seconds": 0.089,
+      "generation_seconds": 0.091,
       "glb_version": 2,
       "has_vertex_colors": true,
       "has_uvs": true
@@ -563,7 +563,7 @@
       "triangle_count": 576,
       "file_size_kb": 75.53,
       "file_size_bytes": 77344,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Reinforced tactical military airdrop container with recessed side panels, steel corner brackets, latch hardware, and strap bands.",
       "tags": [
         "container",
@@ -583,7 +583,7 @@
         "z": 0.963
       },
       "seed": 1727,
-      "generation_seconds": 0.041,
+      "generation_seconds": 0.043,
       "glb_version": 2,
       "has_vertex_colors": true,
       "has_uvs": true
@@ -599,7 +599,7 @@
       "triangle_count": 660,
       "file_size_kb": 82.23,
       "file_size_bytes": 84208,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "200L cylindrical steel drum with raised rolling chimes, Dual bung caps, and Battle Royale hazard striping.",
       "tags": [
         "barrel",
@@ -619,7 +619,7 @@
         "z": 0.6474
       },
       "seed": 1727,
-      "generation_seconds": 0.017,
+      "generation_seconds": 0.018,
       "glb_version": 2,
       "has_vertex_colors": true,
       "has_uvs": true
@@ -635,7 +635,7 @@
       "triangle_count": 636,
       "file_size_kb": 83.57,
       "file_size_bytes": 85576,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Modular Battle Royale concrete & steel jersey barrier with forklift slots, angled deflection base, and upper armor plate.",
       "tags": [
         "cover",
@@ -655,7 +655,7 @@
         "z": 1.224
       },
       "seed": 1727,
-      "generation_seconds": 0.046,
+      "generation_seconds": 0.048,
       "glb_version": 2,
       "has_vertex_colors": true,
       "has_uvs": true
@@ -671,7 +671,7 @@
       "triangle_count": 1368,
       "file_size_kb": 172.36,
       "file_size_bytes": 176492,
-      "updated_at": "2026-10-26T10:50:09Z",
+      "updated_at": "2026-10-26T10:52:23Z",
       "description": "Mid-poly two-seat off-road Battle Royale recon buggy with tubular roll cage, armored nose, suspension arms, roof lightbar, and treaded tires.",
       "tags": [
         "vehicle",
@@ -691,7 +691,7 @@
         "z": 3.477
       },
       "seed": 1727,
-      "generation_seconds": 0.067,
+      "generation_seconds": 0.069,
       "glb_version": 2,
       "has_vertex_colors": true,
       "has_uvs": true
