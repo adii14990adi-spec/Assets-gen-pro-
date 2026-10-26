@@ -1,0 +1,22 @@
+{
+  "id": "chhatri_pavilion",
+  "name": "Royal Octagonal Chhatri Pavilion",
+  "category": "architecture",
+  "description": "Elevated Rajasthani marble & sandstone octagonal Chhatri pavilion with stepped plinth, 8 faceted pillars, scalloped arches, chhajja, and lotus dome.",
+  "tags": ["rajasthani", "palace", "chhatri", "dome", "landmark"],
+  "quality_profile": "optimized_mid_poly",
+  "polygon_budget": 4800,
+  "material_preset": "makrana_marble",
+  "parameters": {
+    "width": 6.8,
+    "depth": 6.8,
+    "height": 7.4,
+    "wall_thickness": 0.36,
+    "opening_width": 1.9,
+    "opening_height": 3.0,
+    "floors": 1,
+    "arch_segments": 16,
+    "roof_style": "lotus_dome",
+    "decorative_detail": 0.85
+  }
+}

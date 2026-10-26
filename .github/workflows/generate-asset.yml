@@ -1,0 +1,171 @@
+name: Generate 3D Asset (Manual Blender Dispatch)
+
+on:
+  workflow_dispatch:
+    inputs:
+      category:
+        description: "Asset category"
+        required: true
+        type: choice
+        default: "architecture"
+        options:
+          - props
+          - architecture
+          - environment
+          - humanoid
+      preset:
+        description: "Model preset ID (must match selected category)"
+        required: true
+        type: choice
+        default: "rajasthani_haveli"
+        options:
+          - br_supply_crate
+          - explosive_fuel_barrel
+          - tactical_cover_barrier
+          - desert_recon_buggy
+          - rajasthani_haveli
+          - rajput_fort_bastion
+          - chhatri_pavilion
+          - pol_arched_gateway
+          - stone_arch_bridge
+          - aravalli_ridge_terrain
+          - battle_royale_island
+          - river_ravine_crossing
+          - desert_rock_outcrop
+          - stylized_banyan_tree
+          - athletic_male_combatant
+          - athletic_female_scout
+          - armored_squad_leader
+      quality_profile:
+        description: "Mid-poly quality & triangle budget profile"
+        required: true
+        type: choice
+        default: "optimized_mid_poly"
+        options:
+          - prototype
+          - optimized_mid_poly
+          - detailed_mid_poly
+      seed:
+        description: "Deterministic integer random seed (0 - 2147483647)"
+        required: true
+        type: string
+        default: "1727"
+      material_preset:
+        description: "PBR Material Theme"
+        required: false
+        type: choice
+        default: "default"
+        options:
+          - default
+          - rajasthan_sandstone
+          - makrana_marble
+          - tactical_military
+          - desert_camo
+          - aravalli_biome
+          - cyber_arena
+      save_blend:
+        description: "Also package native Blender (.blend) project file"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  generate-3d-asset:
+    name: Generate ${{ inputs.preset }} (${{ inputs.quality_profile }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install system OpenGL & X11 client runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libopengl0 libglx0 libglu1-mesa libxrender1 libxi6 libxkbcommon0 libsm6 libice6 libxxf86vm1 libxfixes3 libxt6
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install backend validation dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt
+
+      - name: Set up isolated Blender 4.2.23 LTS runtime & extensions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .venv/bin/python scripts/setup_blender_runtime.py --runtime-dir "$HOME/.local/blender-runtime"
+
+      - name: Validate dispatch inputs & run Blender procedural generation
+        env:
+          INPUT_CATEGORY: ${{ inputs.category }}
+          INPUT_PRESET: ${{ inputs.preset }}
+          INPUT_QUALITY: ${{ inputs.quality_profile }}
+          INPUT_SEED: ${{ inputs.seed }}
+          INPUT_MATERIAL: ${{ inputs.material_preset }}
+          INPUT_SAVE_BLEND: ${{ inputs.save_blend }}
+        run: |
+          if ! [[ "$INPUT_SEED" =~ ^[0-9]+$ ]]; then
+            echo "::error::Seed must be a non-negative integer, got '$INPUT_SEED'"
+            exit 1
+          fi
+          mkdir -p artifacts_out
+          BLEND_FLAG=""
+          if [ "$INPUT_SAVE_BLEND" = "true" ]; then
+            BLEND_FLAG="--save-blend"
+          fi
+          ASSET_ID="gh_${INPUT_PRESET}_s${INPUT_SEED}_${GITHUB_RUN_NUMBER}"
+          .venv/bin/python scripts/cli_generate.py \
+            --category "$INPUT_CATEGORY" \
+            --preset "$INPUT_PRESET" \
+            --quality "$INPUT_QUALITY" \
+            --seed "$INPUT_SEED" \
+            --material "${INPUT_MATERIAL:-default}" \
+            --asset-id "$ASSET_ID" \
+            $BLEND_FLAG \
+            --output-dir artifacts_out
+
+      - name: Write Asset Generation Report to Step Summary
+        run: |
+          .venv/bin/python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob, json
+          meta_files = sorted(glob.glob("artifacts_out/*_metadata.json"))
+          assert meta_files, "Metadata JSON missing!"
+          m = json.load(open(meta_files[0]))
+          s = m["stats"]
+          v = m["validation"]
+          print(f"## Generated 3D Asset: {m['name']}")
+          print(f"- **Category / Preset**: `{m['category']}` / `{m['preset_id']}`")
+          print(f"- **Quality Profile**: `{m['quality_profile']}` (Seed `{m['seed']}`)")
+          print(f"- **Blender Runtime**: `{m['blender_version']}` ({m['generation_time_seconds']}s)")
+          print(f"- **GLB Output**: `{m['glb_filename']}` ({m['glb_size_bytes']:,} bytes)")
+          if m.get("blend_filename"):
+              print(f"- **Blender Project**: `{m['blend_filename']}` ({m['blend_size_bytes']:,} bytes)")
+          print(f"- **Actual Triangles**: **{s['actual_triangles']:,}** (Target Budget: {m['polygon_budget']:,})")
+          print(f"- **Actual Vertices**: {s['actual_vertices']:,} | **Meshes**: {s['mesh_count']} | **Materials**: {s['material_count']}")
+          dims = s["bounding_box"]["dimensions"]
+          print(f"- **Dimensions (W × H × D)**: {dims[0]:.2f}m × {dims[1]:.2f}m × {dims[2]:.2f}m")
+          if s["rig"]["has_armature"]:
+              print(f"- **Humanoid Armature**: {s['rig']['bone_count']} bones, normalized weights={s['rig']['normalized_weights_verified']}")
+          print(f"- **Validation Status**: {'✅ PASSED' if v['valid'] else '❌ FAILED'} ({v['passed_count']} checks passed, {v['warning_count']} warnings, {v['error_count']} errors)")
+          PY
+
+      - name: Upload generated GLB, BLEND, and Metadata artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: asset-${{ inputs.preset }}-seed-${{ inputs.seed }}-run-${{ github.run_number }}
+          path: |
+            artifacts_out/*.glb
+            artifacts_out/*.blend
+            artifacts_out/*_metadata.json
+          if-no-files-found: error
+          retention-days: 30

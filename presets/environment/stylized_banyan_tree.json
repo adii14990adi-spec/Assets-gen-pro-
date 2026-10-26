@@ -1,0 +1,19 @@
+{
+  "id": "stylized_banyan_tree",
+  "name": "Indian Banyan / Acacia Canopy Tree",
+  "category": "environment",
+  "description": "Mid-poly game tree with organic gnarled trunk, aerial prop roots, spreading primary limbs, and layered mobile-friendly canopy clusters.",
+  "tags": ["tree", "vegetation", "foliage", "indian"],
+  "quality_profile": "optimized_mid_poly",
+  "polygon_budget": 3400,
+  "material_preset": "aravalli_biome",
+  "parameters": {
+    "width": 7.5,
+    "depth": 7.5,
+    "elevation": 6.8,
+    "slope_intensity": 0.5,
+    "surface_roughness": 0.45,
+    "terrace_steps": 3,
+    "scatter_density": 0.65
+  }
+}

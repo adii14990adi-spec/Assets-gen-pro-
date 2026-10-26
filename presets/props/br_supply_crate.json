@@ -1,0 +1,18 @@
+{
+  "id": "br_supply_crate",
+  "name": "Battle Royale Airdrop Supply Crate",
+  "category": "props",
+  "description": "Reinforced tactical military airdrop container with recessed side panels, steel corner brackets, latch hardware, and strap bands.",
+  "tags": ["container", "loot", "battle-royale", "hard-surface"],
+  "quality_profile": "optimized_mid_poly",
+  "polygon_budget": 1400,
+  "material_preset": "tactical_military",
+  "parameters": {
+    "width": 1.35,
+    "depth": 0.90,
+    "height": 0.78,
+    "bevel_amount": 0.025,
+    "panel_detail": 0.75,
+    "wear_amount": 0.35
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "stone_arch_bridge",
+  "name": "Masonry Multi-Arch Canyon Bridge",
+  "category": "architecture",
+  "description": "Walkable multi-span stone arch bridge with triangular cutwater piers, vaulted masonry arches, paved roadway deck, and parapet walls.",
+  "tags": ["bridge", "arch", "modular", "level-design"],
+  "quality_profile": "optimized_mid_poly",
+  "polygon_budget": 3800,
+  "material_preset": "rajasthan_sandstone",
+  "parameters": {
+    "width": 14.0,
+    "depth": 4.8,
+    "height": 4.6,
+    "wall_thickness": 0.4,
+    "opening_width": 3.6,
+    "opening_height": 2.9,
+    "floors": 1,
+    "arch_segments": 14,
+    "roof_style": "flat_terrace",
+    "decorative_detail": 0.65
+  }
+}

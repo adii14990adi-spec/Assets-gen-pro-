@@ -1,0 +1,18 @@
+{
+  "id": "explosive_fuel_barrel",
+  "name": "Industrial Corrugated Fuel Barrel",
+  "category": "props",
+  "description": "200L cylindrical steel drum with raised rolling chimes, Dual bung caps, and Battle Royale hazard striping.",
+  "tags": ["barrel", "explosive", "cover", "industrial"],
+  "quality_profile": "optimized_mid_poly",
+  "polygon_budget": 1100,
+  "material_preset": "desert_camo",
+  "parameters": {
+    "width": 0.62,
+    "depth": 0.62,
+    "height": 0.92,
+    "bevel_amount": 0.015,
+    "panel_detail": 0.7,
+    "wear_amount": 0.45
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "pol_arched_gateway",
+  "name": "Fortified Pol Arched Gateway",
+  "category": "architecture",
+  "description": "Grand Indian fortified Pol gate flanked by octagonal buttress towers, pointed cusped arch portal, studded timber doors, and upper guard gallery.",
+  "tags": ["rajasthani", "gate", "arch", "fort", "modular"],
+  "quality_profile": "optimized_mid_poly",
+  "polygon_budget": 5000,
+  "material_preset": "rajasthan_sandstone",
+  "parameters": {
+    "width": 9.5,
+    "depth": 4.2,
+    "height": 8.5,
+    "wall_thickness": 0.65,
+    "opening_width": 3.4,
+    "opening_height": 4.6,
+    "floors": 2,
+    "arch_segments": 14,
+    "roof_style": "chhatri_parapet",
+    "decorative_detail": 0.8
+  }
+}

@@ -1,0 +1,149 @@
+name: CI — Build, Test & Verify Blender 3D Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - "arena/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend TypeScript, Tests & Vite Build
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run TypeScript type check
+        run: npm run typecheck
+
+      - name: Run frontend unit & GLB loader tests
+        run: npm test
+
+      - name: Build production frontend bundle
+        run: npm run build
+
+      - name: Upload frontend dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  backend-and-blender:
+    name: Backend, Blender 4.2 LTS Smoke, Sample GLB & E2E Tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install system OpenGL & X11 client runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libopengl0 libglx0 libglu1-mesa libxrender1 libxi6 libxkbcommon0 libsm6 libice6 libxxf86vm1 libxfixes3 libxt6
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Create backend virtual environment & install dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements-dev.txt
+
+      - name: Run Ruff Python linter
+        run: .venv/bin/ruff check backend scripts tests app.py
+
+      - name: Validate preset schemas & asset type catalog
+        run: |
+          .venv/bin/python -c "
+          from backend.generator.catalog import list_asset_types, list_presets
+          types = list_asset_types()
+          presets = list_presets()
+          assert len(types) == 4, f'Expected 4 categories, got {len(types)}'
+          assert len(presets) >= 12, f'Expected >=12 presets, got {len(presets)}'
+          print(f'Validated {len(types)} categories and {len(presets)} presets successfully.')
+          "
+
+      - name: Set up isolated Blender 4.2.23 LTS runtime & GPL extensions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .venv/bin/python scripts/setup_blender_runtime.py --runtime-dir "$HOME/.local/blender-runtime"
+
+      - name: Run Blender background smoke test
+        env:
+          BLENDER_PYTHON_EXECUTABLE: ${{ runner.os == 'Linux' && format('{0}/.local/blender-runtime/bin/python', env.HOME) || '' }}
+        run: .venv/bin/python scripts/smoke_test_blender.py
+
+      - name: Generate & independently validate sample Rajasthani Haveli GLB
+        run: |
+          mkdir -p ci_artifacts/sample_asset
+          .venv/bin/python scripts/cli_generate.py \
+            --category architecture \
+            --preset rajasthani_haveli \
+            --quality prototype \
+            --seed 1727 \
+            --asset-id ci_sample_rajasthani_haveli \
+            --save-blend \
+            --output-dir ci_artifacts/sample_asset
+
+      - name: Run full automated pytest E2E suite
+        run: |
+          mkdir -p ci_artifacts/reports
+          .venv/bin/pytest --junitxml=ci_artifacts/reports/pytest-junit.xml -v
+
+      - name: Publish CI summary
+        if: always()
+        run: |
+          echo "### Procedural 3D Asset Studio — CI Verification" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f ci_artifacts/sample_asset/ci_sample_rajasthani_haveli_metadata.json ]; then
+            .venv/bin/python -c "
+          import json
+          m = json.load(open('ci_artifacts/sample_asset/ci_sample_rajasthani_haveli_metadata.json'))
+          print(f'- **Sample Asset**: {m[\"name\"]} (\`{m[\"glb_filename\"]}\`, {m[\"glb_size_bytes\"]:,} bytes)')
+          print(f'- **Blender Version**: {m[\"blender_version\"]}')
+          print(f'- **Measured Triangles**: {m[\"stats\"][\"actual_triangles\"]:,}')
+          print(f'- **Validation Passed**: {m[\"validation\"][\"valid\"]}')
+          " >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload test reports & generated sample GLB artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-reports-and-sample-glb
+          path: |
+            ci_artifacts/reports/pytest-junit.xml
+            ci_artifacts/sample_asset/*.glb
+            ci_artifacts/sample_asset/*.blend
+            ci_artifacts/sample_asset/*_metadata.json
+          retention-days: 14

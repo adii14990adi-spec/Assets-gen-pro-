@@ -1,0 +1,24 @@
+{
+  "id": "armored_squad_leader",
+  "name": "Armored Squad Leader (Full Tactical Loadout)",
+  "category": "humanoid",
+  "description": "Detailed mid-poly Battle Royale squad leader with connected anatomical body, plate carrier armor vest, tactical backpack, boots, clothing, hair, and full humanoid armature.",
+  "tags": ["character", "armored", "rigged", "detailed", "humanoid"],
+  "quality_profile": "detailed_mid_poly",
+  "polygon_budget": 34000,
+  "material_preset": "tactical_military",
+  "parameters": {
+    "gender": "male",
+    "height": 1.83,
+    "musculature": 0.72,
+    "shoulder_width": 1.08,
+    "hip_width": 1.0,
+    "limb_length_scale": 1.0,
+    "include_clothing": true,
+    "include_hair": true,
+    "include_shoes": true,
+    "include_armor": true,
+    "include_backpack": true,
+    "include_rig": true
+  }
+}

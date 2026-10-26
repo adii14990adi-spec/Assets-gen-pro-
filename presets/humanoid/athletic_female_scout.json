@@ -1,0 +1,24 @@
+{
+  "id": "athletic_female_scout",
+  "name": "Athletic Female Recon Scout",
+  "category": "humanoid",
+  "description": "Connected anatomical female scout character with athletic proportions, 5-finger hands, fitted recon attire, boots, sculpted hair, and normalized skinning.",
+  "tags": ["character", "female", "rigged", "scout", "humanoid"],
+  "quality_profile": "optimized_mid_poly",
+  "polygon_budget": 28000,
+  "material_preset": "desert_camo",
+  "parameters": {
+    "gender": "female",
+    "height": 1.69,
+    "musculature": 0.48,
+    "shoulder_width": 0.96,
+    "hip_width": 1.05,
+    "limb_length_scale": 1.01,
+    "include_clothing": true,
+    "include_hair": true,
+    "include_shoes": true,
+    "include_armor": false,
+    "include_backpack": true,
+    "include_rig": true
+  }
+}
