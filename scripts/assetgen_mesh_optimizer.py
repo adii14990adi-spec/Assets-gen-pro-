@@ -84,20 +84,21 @@ import bmesh
 from mathutils import Matrix, Vector
 # isort: on
 
-# The README section that documents this panel; Blender shows it under the
-# add-on entry's "Documentation" button.
-DOC_URL = ("https://github.com/adii14990adi-spec/Assets-gen-pro-"
-           "#cleaning-up-an-ai-generated-mesh-optional-blender-add-on")
-
+# Every value here has to be a *literal*: Blender's `addon_utils` does not
+# import this file to list the add-on, it parses the module with `ast`, so a
+# module-level constant or a call inside this dict makes the add-on silently
+# disappear from Preferences -> Add-ons.  The URL below points at the README
+# section describing the panel and feeds the entry's "Documentation" button.
 bl_info = {
-    "name": "Asset Forge: AI Mesh Optimizer",
+    "name": "AssetGenPro: AI Mesh Optimizer",
     "author": "Asset Forge",
     "version": (1, 0, 0),
     "blender": (4, 0, 0),
     "location": "3D Viewport > Sidebar (N) > AssetGenPro",
     "description": "One-click cleanup, retopology, UV unwrap and rig-ready "
                    "prep for AI-generated meshes (bmesh + modifiers only)",
-    "doc_url": DOC_URL,
+    "doc_url": "https://github.com/adii14990adi-spec/Assets-gen-pro-"
+               "#cleaning-up-an-ai-generated-mesh-optional-blender-add-on",
     "support": "COMMUNITY",
     "category": "Asset Forge",
 }

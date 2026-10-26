@@ -72,12 +72,39 @@ def test_addon_exists_with_bl_info():
     assert "bl_info" in source
     assignment = next(node for node in tree.body if isinstance(node, ast.Assign)
                       and any(getattr(t, "id", "") == "bl_info" for t in node.targets))
-    info = ast.literal_eval(assignment.value)
+    try:
+        info = ast.literal_eval(assignment.value)
+    except ValueError as exc:                        # exactly what Blender hits
+        raise AssertionError(
+            "bl_info must hold literals only: addon_utils reads it with "
+            "ast.literal_eval instead of importing the file, so a name or a call "
+            f"there hides the add-on from Preferences -> Add-ons ({exc})"
+        ) from exc
     assert info["blender"] >= (4, 0, 0), "the brief targets Blender 4.0+"
     for key in ("name", "author", "version", "blender", "category", "description"):
         assert info.get(key), f"bl_info is missing '{key}'"
+    assert isinstance(info["version"], tuple) and isinstance(info["blender"], tuple)
+    # the docstring and README both tell users to enable this exact entry
+    assert info["name"] in source, "the enable-name must also appear in the file's own docs"
     # a docstring is what makes the file usable without opening the source
     assert ast.get_docstring(tree) and len(ast.get_docstring(tree)) > 400
+
+
+def test_bl_info_has_no_computed_values():
+    """``"version": (1, 0, 0)`` is fine, ``"version": VERSION`` is not.
+
+    Regression guard: one polish pass replaced a URL literal with a module-level
+    constant.  The file still imported, registered and passed every functional
+    test -- but `addon_utils` could no longer parse `bl_info`, so the add-on
+    simply never appeared in Preferences -> Add-ons.
+    """
+    assignment = next(node for node in tree.body if isinstance(node, ast.Assign)
+                      and any(getattr(t, "id", "") == "bl_info" for t in node.targets))
+    for node in ast.walk(assignment.value):
+        if isinstance(node, ast.Name):
+            raise AssertionError(f"bl_info references the name {node.id!r}; inline the literal")
+        assert not isinstance(node, (ast.Call, ast.JoinedStr)), \
+            "bl_info values must be literals, not calls or f-strings"
 
 
 def test_bpy_is_imported_before_bmesh_and_mathutils():
