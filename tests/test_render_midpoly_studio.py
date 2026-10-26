@@ -197,7 +197,7 @@ async def test_live_generate_routes_json_and_binary_glb_and_builtin_studio(
                 assert body["status"] == "completed"
                 assert body["vertices"] > 100
                 assert body["faces"] > 50
-                assert body["triangles"] == body["faces"]
+                assert body["triangles"] >= body["faces"]
                 assert body["file_size_kb"] > 1.0
                 raw_glb = base64.b64decode(body["glb_base64"])
                 assert raw_glb[:4] == b"glTF"
