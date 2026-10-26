@@ -7,6 +7,8 @@ There is **no FastAPI server, no Render service, no Docker runtime, and no cold 
 | What | Where |
 | --- | --- |
 | Python generators (pure code, no GUI, no hand modelling) | [`scripts/generators/`](scripts/generators) |
+| Standalone Blender 4.0+ script: rigged athletic female character (`.blend` + skinned `.glb`) | [`scripts/generate_athletic_female_character.py`](scripts/generate_athletic_female_character.py) |
+| Optional Blender add-on: clean / optimise / rig-ready any AI mesh from an N-panel | [`scripts/assetgen_mesh_optimizer.py`](scripts/assetgen_mesh_optimizer.py) |
 | Build entrypoint → `.glb` + `manifest.json` | [`scripts/build_all_assets.py`](scripts/build_all_assets.py) |
 | Static 3D gallery & inspector | [`public/index.html`](public/index.html) |
 | Generated models + manifest | [`public/assets/models/`](public/assets/models), [`public/assets/manifest.json`](public/assets/manifest.json) |
@@ -20,7 +22,7 @@ There is **no FastAPI server, no Render service, no Docker runtime, and no cold 
 push to main ──► GitHub Actions (ubuntu-24.04, Python 3.11)
                    ├─ pip install --prefer-binary numpy scipy trimesh
                    ├─ ruff check scripts tests
-                   ├─ pytest                       # 51 generator / gallery / workflow tests
+                   ├─ pytest                       # 70 generator / gallery / workflow / add-on tests
                    ├─ python scripts/build_all_assets.py
                    │     presets/*.json  ─►  scripts/generators/*.py  ─►  in-memory mesh
                    │                          └─► flat-facet normals, triplanar UVs,
@@ -133,6 +135,32 @@ The generators are pure NumPy/SciPy/Trimesh code and the exporter is a hand-writ
 * no quadric simplifier (`fast-simplification`): polygon budgets are enforced with a deterministic vertex-cluster decimation pass, so a laptop and CI produce identical bytes;
 * swapping in Blender later only requires adding a `bpy` code path behind the same `generate_asset()` contract.
 
+### Cleaning up an AI-generated mesh (optional Blender add-on)
+
+Anything that enters the project from outside — a Tripo/Meshy/Rodin/GLB drop — usually needs the same
+five repairs before it can be rigged, so [`scripts/assetgen_mesh_optimizer.py`](scripts/assetgen_mesh_optimizer.py)
+(registered as *AssetGenPro: AI Mesh Optimizer*) ships as a Blender 4.0+ add-on with an
+**AssetGenPro** sidebar tab:
+
+| Step | Button | What runs |
+| --- | --- | --- |
+| 0 | Import & Setup | apply location/rotation/scale (scale becomes 1.000) and move the origin to geometry, world origin or floor |
+| 1 | Clean Mesh | `bmesh.ops.remove_doubles` at a user-set distance (default `0.0001`), degenerate-face dissolve, optional coplanar-triangle dissolve, loose vert/edge removal, floating-island removal, `recalc_face_normals` plus a signed-volume check so an inside-out shell ends up outward |
+| 2 | Symmetrize | `bmesh.ops.symmetrize` across X/Y/Z with a snap distance, for the half-modelled limbs AI generators produce |
+| 3 | Optimize | **Mode A** Decimate (Collapse, ratio or an exact face budget, UVs/materials/weights intact) or **Mode B** Voxel Remesh (default `0.02` m) for a uniform rigging base, with an optional budget pass and UV/vertex-colour recovery from the untouched `*_AI_SRC` backup through a Data Transfer modifier |
+| 4 | Auto UV Unwrap | Smart UV Project (angle limit + island margin) into a fresh atlas so the original texture can be baked onto the new topology |
+
+Install it with *Edit → Preferences → Add-ons → Install…* (or paste it into a Text Editor and run —
+`register()` is at the bottom of the file), then press `N` in the 3D Viewport. Every slider lives on the
+scene, the cleanup is pure `bmesh` rather than edit-mode operators, and modifier application goes through
+`temp_override`, so the whole thing also runs under `--background` and is exercised by
+`tests/test_mesh_optimizer_addon.py` (the eight functional tests skip unless a real `bpy` is importable,
+which is why CI stays Blender-free).
+
+Two behaviours are deliberate: destructive passes **refuse** to weld a mesh that still has shape keys or
+skin weights until you tick the matching override, and the last-untouched copy is kept hidden as
+`<name>_AI_SRC` because it is both the transfer source and the thing you bake from.
+
 ---
 
 ## Static gallery features
@@ -193,6 +221,8 @@ The first workflow run creates the `gh-pages` branch; the site is then live at
 │       └── models/*.glb               #   generated binary glTF 2.0 models
 ├── scripts/
 │   ├── build_all_assets.py            # generate → validate → write .glb + manifest
+│   ├── generate_athletic_female_character.py  # optional Blender path: mesh + 51-bone rig
+│   ├── assetgen_mesh_optimizer.py     # optional Blender add-on: AI mesh cleanup panel
 │   └── generators/
 │       ├── pipeline.py                # orchestration + GLB structural validation
 │       ├── specs.py                   # asset catalogue (presets → script + seed)
@@ -205,7 +235,7 @@ The first workflow run creates the `gh-pages` branch; the site is then live at
 │       ├── architecture.py            # Rajasthani / modular architecture
 │       ├── terrain.py                 # fBm terrain, water, vegetation
 │       └── props.py                   # crates, barrels, barriers, buggy
-├── tests/                             # 51 tests: generators, hero, manifest, site, workflow
+├── tests/                             # 70 tests: generators, hero, manifest, site, workflow, add-on
 └── docs/ARCHITECTURE.md, docs/DEPLOYMENT.md
 ```
 

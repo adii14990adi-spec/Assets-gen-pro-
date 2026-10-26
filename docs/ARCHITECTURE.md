@@ -55,6 +55,7 @@
 | `generators/architecture.py` | Cusped arches, walls with portals, Jharokha balconies, Chhajja eaves, lotus domes, Kangura battlements, chhatri pavilions, arch bridges. |
 | `generators/terrain.py` | Multi-octave fBm/ridged heightfields closed into watertight solids, strata terracing, Poisson-style boulder scatter, water planes, Banyan/Acacia trees. |
 | `generators/props.py` | Chamfered crates with latches and brackets, corrugated fuel drums, cover barriers, off-road buggy. |
+| `assetgen_mesh_optimizer.py` | Optional Blender 4.0+ add-on (not part of the headless build): N-panel that welds, dissolves, deletes loose geometry, re-orients normals, symmetrizes, decimates or voxel-remeshes, transfers UVs/colours back and re-unwraps, all through `bmesh` + modifiers. |
 | `build_all_assets.py` | CLI: catalogue → generate → validate → write `.glb` (atomic per asset) → prune orphaned models → write `manifest.json` with repository/commit provenance. |
 
 ## 4. Determinism contract
