@@ -1,85 +1,96 @@
-# System Architecture & Godot 4 Pipeline Guide
+# Architecture — Code-Only Generation, Static Delivery
 
-## 1. End-to-End Web-to-Blender Pipeline
+## 1. Design goals
 
-```text
-[React + Three.js Studio]
-       │  POST /api/generate (strictly validated JSON, no shell/script input)
-       ▼
-[FastAPI Web Process (.venv — NO bpy imported)]
-       │  Validates category, preset, bounds, & enqueues JobRecord in SQLite (WAL)
-       ▼
-[Async Background JobManager] ──(SSE / WebSocket live stage events)──► [Browser UI]
-       │  Spawns isolated process group with CPU & wall-clock bounds
-       ▼
-[Blender 4.2.23 LTS Python Runtime (`backend/blender/runner.py`)]
-   1. Factory reset (`read_factory_settings(use_empty=True)`)
-   2. Selective capability activation (`activate_capabilities_for_category`)
-   3. Deterministic geometry synthesis (`bpy` + `bmesh` + `numpy` + Geometry Nodes)
-   4. Procedural PBR Principled BSDF materials + packed NumPy albedo textures + box UVs
-   5. Scene topology, transform, UV, & normalized skin-weight inspection
-   6. glTF 2.0 binary `.glb` export (+ optional compressed `.blend` project)
-   7. Fresh-scene `.glb` roundtrip re-import verification inside Blender
-       │
-       ▼
-[Independent Post-Export Validator (`backend/validation/validator.py`)]
-   - Binary glTF 2.0 header (`0x46546C67`), version 2, & chunk-length verification
-   - Independent `trimesh` scene load, face-index bounds, zero-area triangle & winding checks
-   - Atomic promotion into `storage_data/assets/{asset_id}/` ONLY after verification succeeds
-       │
-       ▼
-[React Three Fiber Viewport (`Viewport3D.tsx`)]
-   - Fetches real `.glb` binary, checks glTF magic header, creates revocable Object URL
-   - Renders with `GLTFLoader` + `RoomEnvironment` PBR + Material / Solid / Wireframe / Skeleton modes
+| Goal | Consequence in this repository |
+| --- | --- |
+| Every 3D model is created by Python code | `scripts/generators/` (NumPy + SciPy + Trimesh). No sculpting, no downloaded assets, no runtime modelling in the browser. |
+| Zero server runtime | No FastAPI/uvicorn/`app.py`, no `backend/`, no `render.yaml`, no Docker image. The deployable artifact is a folder of static files. |
+| Deterministic, reviewable assets | Seeded RNG, deterministic exporter byte layout, measured metadata, byte-equality tests. |
+| Instant page load | Static HTML + CDN Three.js + small cached `.glb` files (~8.5 MB total for 18 models, 76 KB–1.8 MB each). |
+| Deploy that can never fail on Pages misconfiguration | `peaceiris/actions-gh-pages@v4` branch push; no `actions/configure-pages`/`deploy-pages`. |
+
+## 2. Layers
+
+```
+┌──────────────────────────── Python build time (GitHub Actions) ────────────────────────────┐
+│ presets/*.json ──► generators/specs.py ──► AssetSpec(id, category, seed, budget, params)   │
+│                                                        │                                    │
+│                                    generators/pipeline.py · generate_asset(config)         │
+│                                                        │                                    │
+│        ┌───────────────────────────┬───────────────────┴────────────┬────────────────────┐  │
+│        │ humanoid.build_humanoid   │ architecture.build_architecture│ terrain.build_       │  │
+│        │ → character_tpose.py      │                                │ environment          │  │
+│        │                           │ props.build_prop               │                      │  │
+│        └───────────────────────────┴────────────────────────────────┴────────────────────┘  │
+│                                                        │                                    │
+│      meshkit.SceneBuilder (material-slot groups) → enforce_budget → facet/smooth baking      │
+│                                                        │                                    │
+│      glb_writer.build_glb_stream  →  bytes  →  diagnostics.measure_diagnostics (re-import)  │
+│                                                        │                                    │
+│      pipeline.validate_glb_bytes (header, chunks, accessors, index bounds, parity)           │
+│                                                        │                                    │
+│      build_all_assets.py  →  public/assets/models/<id>.glb + public/assets/manifest.json    │
+└────────────────────────────────────────────────────────────────────────────────────────────┘
+                                          │  git push (gh-pages)
+┌──────────────────────────── Browser (GitHub Pages, static) ─────────────────────────────────┐
+│ public/index.html → fetch ./assets/manifest.json → GLTFLoader(./assets/models/<id>.glb)      │
+│ Three.js scene: 3-point lights, grid, shadow catcher · OrbitControls · inspector toolbar      │
+│ HUD reads manifest metadata (measured at build time) + live geometry counts from the scene     │
+└────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## 2. Capability Registry & Extension Isolation
+## 3. Module responsibilities
 
-Every modeling extension and mesh-processing library sits behind an explicit adapter in `backend/integrations/`:
+| Module | Responsibility |
+| --- | --- |
+| `generators/specs.py` | Reads `presets/*.json`, validates categories, attaches the producing script, seed and (for the hero) the face-band budget ladder. |
+| `generators/pipeline.py` | `generate_asset()` orchestration: RNG seeding, material resolution, builder dispatch, budget enforcement, shading, export, measured diagnostics. Also `validate_glb_bytes()` — an independent structural validator/gate. |
+| `generators/meshkit.py` | Watertight primitives (box, cylinder-Y, cone-Y, icosphere, torus, tube, displaced rock), `SceneBuilder` material grouping, deterministic vertex-cluster decimation (component-aware), triplanar UVs, flat-facet and smooth normal baking, `mesh_to_glb_part`. |
+| `generators/glb_writer.py` | Deterministic glTF 2.0 binary writer: 4-byte aligned buffer views, `POSITION` min/max, `COLOR_0` (linear space), `TEXCOORD_0`, named `pbrMetallicRoughness` materials. |
+| `generators/palette.py` | Material themes (Rajasthan sandstone, Makrana marble, tactical military, desert camo, Aravalli biome, cyber arena) and character palettes driven by `skin_color`/`outfit_color`. |
+| `generators/diagnostics.py` | Measured topology: triangles, vertices, degenerate faces, non-manifold edges, component counts, bounding box, material summaries, and the GLB re-import check. |
+| `generators/character_tpose.py` | Hero faceted mid-poly female T-pose character from cubic-spline loft profiles. |
+| `generators/humanoid.py` | A-pose male/female combatant archetypes (armour, backpack, boots, hands). |
+| `generators/architecture.py` | Cusped arches, walls with portals, Jharokha balconies, Chhajja eaves, lotus domes, Kangura battlements, chhatri pavilions, arch bridges. |
+| `generators/terrain.py` | Multi-octave fBm/ridged heightfields closed into watertight solids, strata terracing, Poisson-style boulder scatter, water planes, Banyan/Acacia trees. |
+| `generators/props.py` | Chamfered crates with latches and brackets, corrugated fuel drums, cover barriers, off-road buggy. |
+| `build_all_assets.py` | CLI: catalogue → generate → validate → write `.glb` (atomic per asset) → prune orphaned models → write `manifest.json` with repository/commit provenance. |
 
-- **Blender Core (`blender_core`)** & **glTF 2.0 (`gltf2_exporter`)** — GPL-3.0 / Apache-2.0 — Required core engine.
-- **Blender Geometry Nodes (`geometry_nodes`)** — GPL-3.0 — Used selectively for `architecture` (Kangura parapet arrays) and `environment` (Poisson boulder scattering).
-- **Native Boolean (`native_boolean`)** & **Bool Tool (`bool_tool`)** — GPL-3.0 / GPL-2.0 — Used selectively for `architecture` (interior room hollowing, cusped arches, sally-ports) and `props` (barrier drainage cutouts).
-- **Rigify (`rigify`)** — GPL-2.0 — Enabled selectively for `humanoid` rigging workflows alongside our Godot 4 `SkeletonProfileHumanoid` bone & analytical capsule-weight builder.
-- **LoopTools (`looptools`)** — GPL-2.0 — Enabled selectively for `humanoid` and `props` loop operations, with analytical BMesh fallback.
-- **MPFB2 / MakeHuman (`mpfb`)** — GPL-3.0 — Dynamically probed; when external MakeHuman asset packs are absent, the studio honestly reports `mpfb` as unavailable and uses the built-in **connected single-shell anatomical BMesh + Skin + Harmonic Sculpt humanoid generator**.
-- **Trimesh (`trimesh`)**, **PyMeshLab (`pymeshlab`)**, and **Open3D (`open3d`)** — Probed in the backend runtime for independent post-export geometry verification.
+## 4. Determinism contract
 
-## 3. Godot 4 Android Battle Royale Integration Notes
+1. Seed = `seed XOR crc32(preset_id)`, truncated to 31 bits — stable across platforms.
+2. No wall-clock, no network, no environment-dependent geometry; `float64` math via NumPy/SciPy.
+3. The exporter sorts parts, materials, and accessors and writes a fixed buffer layout.
+4. `tests/test_generators.py` and `tests/test_hero_character.py` assert byte-for-byte equality across repeated runs.
 
-1. **Coordinate System & Units**: All assets are modeled in metric units (`1.0 = 1 meter`), grounded cleanly at `Z = 0` in Blender, and exported with `export_yup=True` so Godot 4 imports them upright (`+Y` up) at exact 1:1 world scale.
-2. **Mobile Renderer (`Mobile` / `gl_compatibility`)**: Materials use standard glTF 2.0 `pbrMetallicRoughness` factors plus lightweight `128×128` embedded PNG grain textures—zero custom Blender node shaders that fail glTF export.
-3. **Humanoid Retargeting**: Rigged characters use standard `Root -> Hips -> Spine -> Chest -> UpperChest -> Neck -> Head`, `Left/RightShoulder -> UpperArm -> LowerArm -> Hand -> 5 Fingers`, and `Left/RightUpperLeg -> LowerLeg -> Foot` hierarchy with strictly `<= 4` normalized bone influences per vertex (`JOINTS_0` / `WEIGHTS_0`). In Godot 4's Advanced Import dialog, assign a `SkeletonProfileHumanoid` resource for immediate animation retargeting.
-4. **Mid-Poly Preservation**: Articulated characters are **never** passed through destructive mesh decimation; polygon counts are controlled cleanly via subdivision levels (`Prototype`, `Optimized Mid-Poly`, `Detailed Mid-Poly`) and equipment toggles so joint deformation loops remain intact.
+## 5. Validation strategy (defence in depth)
 
-## 4. Dual-Engine Generation (Blender & Pure-Python Fallback)
+| Stage | What is proven |
+| --- | --- |
+| Generator unit tests | Required body parts exist, feet at `y≈0`, parts are non-degenerate, T-pose span ≥ height. |
+| `measure_diagnostics` | Real triangle/vertex counts, degenerate faces, non-manifold edge count, bounds. |
+| Round-trip re-import | The exact exported bytes are re-loaded with Trimesh and triangle counts must match. |
+| `validate_glb_bytes` | GLB magic/version/declared length, chunk alignment, JSON parse, buffer sizes, `POSITION` min/max presence, accessor/bufferView bounds, index range, triangle parity. |
+| CI verification step | Every shipped file re-read: magic, length, manifest keys, size parity, hero face band, script path existence. |
+| Browser-side reality check | `GLTFLoader` parses each model in the deployed site; the HUD counts come from the loaded scene. |
 
-`backend/blender/runtime.py` selects the engine per job
-(`STUDIO_GENERATION_ENGINE=auto|blender|python`):
+## 6. Front-end architecture
 
-1. **Blender engine** — used when a `blender` CLI, the isolated
-   `bpy==4.2.23` venv (`BLENDER_PYTHON_EXECUTABLE`), or an importable `bpy`
-   module is detected (via `importlib.util.find_spec`, never by importing
-   `bpy` into the web process). Full BMesh/Geometry Nodes/Boolean pipeline
-   with Rigify-compatible skinned humanoids, PBR textures, roundtrip
-   re-import verification, and optional native `.blend` output.
-2. **Python fallback engine** (`backend/fallback/`) — used automatically
-   when no Blender runtime exists (Render Native Python, slim CI).
-   Deterministic seeded builders for all 17 presets author geometry
-   directly in glTF space (meters, Y-up) from Trimesh primitives, custom
-   closed-solid heightfields, and capsule/ellipsoid characters; a NumPy
-   vertex-clustering decimator enforces polygon budgets; meshes are
-   faceted (flat normals), triplanar-UV-projected, vertex-colored, and
-   serialized by a dedicated glTF 2.0 writer (`POSITION`/`NORMAL`/
-   `TEXCOORD_0`/`COLOR_0` + named `pbrMetallicRoughness` materials).
-   Diagnostics are measured with Trimesh (including a real GLB reload
-   roundtrip), so both engines feed the identical validator, job manager,
-   schemas, and frontend. Blender-only features (armature skinning,
-   `.blend` files, embedded textures) are declared in
-   `capabilities_fallback` — never silently faked.
+* Single HTML file, ES modules, import map → `three@0.170.0` (`three.module.js`, `GLTFLoader`, `OrbitControls`, `RoomEnvironment`).
+* State object holds manifest, filters, selection, shading mode, wireframe flag, background preset.
+* **Shading preview** works by swapping geometries: the exported geometry (flat, one normal per triangle) and a lazily built welded twin whose normals are recomputed with `computeVertexNormals()` — no re-export, no geometry authoring.
+* **Wireframe overlay** is a `WireframeGeometry`+`LineSegments` child added on first use and toggled after.
+* **Backgrounds** are a canvas gradient used as `scene.background`, with matching grid colours, fog and exposure.
+* **Responsive shell**: sidebar at ≥1024 px, slide-over drawer below; the HUD collapses on phones; `ResizeObserver` keeps the renderer pixel-ratio aware.
+* **Deep links**: `?model=<id>` selects a model; the share URL is rewritten with `history.replaceState`.
 
-Engine identity is observable everywhere: `GET /api/health`
-(`generation_engine`, `blender_available`, `python_fallback_available`),
-`GET /api/capabilities` (`python_fallback_engine` capability), and each
-asset's metadata (`capabilities_used`, `blender_version` =
-`PythonFallback/1.0` under the fallback engine).
+## 7. Removed components
+
+| Removed | Why |
+| --- | --- |
+| `app.py`, `main.py`, `backend/**` | FastAPI job queue, SSE/WebSocket progress, SQLite storage, Blender runner — all unnecessary once models are pre-generated. |
+| `frontend/**` (React/Vite/R3F) | Replaced by a dependency-free static page that needs no build step. |
+| `render.yaml`, `Dockerfile`, `.dockerignore`, `.env.example`, `runtime.txt` | Deployment-time server infrastructure. |
+| `.github/workflows/ci.yml`, `generate-asset.yml` | Folded into the single `deploy.yml` (lint + tests + generate + deploy). |
+| `scripts/setup_blender_runtime.py`, `smoke_test_blender.py`, `cli_generate.py` | Blender-runtime bootstrapping and the server-oriented CLI; superseded by `build_all_assets.py`. |

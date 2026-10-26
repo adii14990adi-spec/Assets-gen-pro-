@@ -1,22 +1,36 @@
-"""Shared pytest fixtures for isolated storage, SQLite DB, and FastAPI E2E client."""
+"""Shared pytest fixtures for the code-only 3D asset pipeline."""
 
 from __future__ import annotations
 
 import pathlib
+import sys
 
 import pytest
 
-from backend.config import Settings
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+SCRIPTS_DIR = REPO_ROOT / "scripts"
+
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
 
 
-@pytest.fixture()
-def isolated_settings(tmp_path: pathlib.Path) -> Settings:
-    storage_dir = tmp_path / "studio_storage"
-    db_path = storage_dir / "test_studio.sqlite3"
-    return Settings(
-        STUDIO_STORAGE_DIR=storage_dir,
-        STUDIO_DATABASE_URL=f"sqlite:///{db_path}",
-        STUDIO_MAX_CONCURRENT_JOBS=2,
-        STUDIO_JOB_TIMEOUT_SECONDS=120,
-        STUDIO_MAX_RETRIES=0,
-    )
+@pytest.fixture(scope="session")
+def repo_root() -> pathlib.Path:
+    return REPO_ROOT
+
+
+@pytest.fixture(scope="session")
+def public_dir(repo_root: pathlib.Path) -> pathlib.Path:
+    return repo_root / "public"
+
+
+@pytest.fixture(scope="session")
+def specs(repo_root: pathlib.Path):
+    from generators.specs import load_specs
+
+    return load_specs(repo_root)
+
+
+@pytest.fixture(scope="session")
+def spec_by_id(specs):
+    return {spec.id: spec for spec in specs}
