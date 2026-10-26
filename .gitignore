@@ -9,39 +9,25 @@ __pycache__/
 coverage.xml
 htmlcov/
 
-# Virtual environments & local runtimes
+# Virtual environments
 .venv/
 venv/
 env/
-.blender-runtime/
 
 # Environment secrets
 .env
 .env.local
 
-# Runtime databases & generated binary artifacts
-storage_data/
-*.sqlite3
-*.sqlite3-journal
-*.sqlite3-wal
-*.sqlite3-shm
-*.db
+# Local scratch output (the real build writes into public/assets/)
+artifacts_out/
+tmp_jobs/
 *.blend
 *.blend1
 
-# Generated GLB outputs (keep any explicit test fixtures if ever added under tests/fixtures/)
-storage_data/**/*.glb
-artifacts_out/
-tmp_jobs/
-
-# Frontend build & dependencies
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
-*.tsbuildinfo
+# Node tooling used only for ad-hoc three.js verification
 node_modules/
-dist/
-build/
+package-lock.json
+package.json
 
 # IDE & OS
 .DS_Store
@@ -50,3 +36,10 @@ build/
 
 # Python packaging
 *.egg-info/
+
+# ---------------------------------------------------------------------------
+# NOTE: public/assets/models/*.glb and public/assets/manifest.json are
+# committed on purpose. They are the static gallery that GitHub Pages serves,
+# they are small (~9 MB total), and committing them means the site is viewable
+# from a plain checkout. CI regenerates both on every push to main.
+# ---------------------------------------------------------------------------

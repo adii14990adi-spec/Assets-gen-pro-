@@ -1,0 +1,134 @@
+# =============================================================================
+# Procedural 3D Asset Forge — build models with Python, publish a static site
+# =============================================================================
+# There is NO runtime server. This workflow is the entire "backend":
+#
+#   1. Python scripts in scripts/generators/ create every 3D model.
+#   2. scripts/build_all_assets.py exports validated binary .glb files into
+#      public/assets/models/ and regenerates public/assets/manifest.json.
+#   3. The finished public/ folder is published straight to the gh-pages
+#      branch, which GitHub Pages serves as a static 3D gallery.
+#
+# Deliberately NOT used: actions/configure-pages / actions/deploy-pages.
+# They require a pre-existing Pages site and fail the whole run with
+# "HttpError: Not Found - Get Pages site failed" on repositories where Pages
+# has not been enabled yet. peaceiris/actions-gh-pages@v4 just pushes a branch,
+# so the build can never fail for that reason.
+# =============================================================================
+name: Build 3D Assets & Deploy Gallery
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Needed by peaceiris/actions-gh-pages to force-push the gh-pages branch.
+permissions:
+  contents: write
+
+# Never run two deploys at once; the newest push wins.
+concurrency:
+  group: deploy-gh-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Generate .glb assets → deploy public/ to gh-pages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      # Pure-Python generation stack: every dependency ships manylinux /
+      # macOS / Windows wheels for CPython 3.11, so nothing is compiled here.
+      # (bpy / fast-simplification are intentionally not required: geometry is
+      # authored with numpy + scipy + trimesh and budget enforcement uses a
+      # deterministic vertex-cluster pass, so the build stays fast and
+      # reproducible. See README → "Why no Blender in CI?".)
+      - name: Install generation dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --prefer-binary numpy scipy trimesh
+          python -m pip install --prefer-binary -r requirements-dev.txt
+          python -c "import numpy, scipy, trimesh; print('numpy', numpy.__version__, '| scipy', scipy.__version__, '| trimesh', trimesh.__version__)"
+
+      - name: Lint generators
+        run: ruff check scripts tests
+
+      - name: Run generator & gallery test suite
+        run: pytest -v
+
+      - name: Generate all .glb models and rebuilt manifest
+        run: python scripts/build_all_assets.py
+
+      - name: Verify the static site can be served as-is
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+
+          public = pathlib.Path("public")
+          manifest_path = public / "assets" / "manifest.json"
+          assert (public / "index.html").is_file(), "public/index.html is missing"
+          assert (public / ".nojekyll").is_file(), "public/.nojekyll is missing"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          models = manifest["models"]
+          assert len(models) >= 18, f"expected >= 18 models, found {len(models)}"
+
+          required = {"id", "name", "category", "script_source", "glb_path",
+                      "vertex_count", "face_count", "file_size_kb", "updated_at"}
+          hero = next(m for m in models if m["id"] == "midpoly_character")
+          for model in models:
+              missing = required - model.keys()
+              assert not missing, f"{model['id']} is missing manifest keys {sorted(missing)}"
+              glb = public / model["glb_path"]
+              assert glb.is_file(), f"missing model file {glb}"
+              data = glb.read_bytes()
+              assert data[:4] == b"glTF", f"{glb} is not a binary glTF container"
+              assert len(data) == int.from_bytes(data[8:12], "little"), "GLB length header mismatch"
+              assert abs(len(data) / 1024 - model["file_size_kb"]) < 0.5, "manifest size drift"
+              assert model["face_count"] > 0 and model["vertex_count"] >= model["face_count"]
+              assert model["script_source"].startswith("scripts/generators/"), "bad script_source"
+
+          assert 1200 <= hero["face_count"] <= 1500, f"hero is {hero['face_count']} faces"
+          assert hero["script_source"] == "scripts/generators/character_tpose.py"
+          total_kb = sum(m["file_size_kb"] for m in models)
+          print(f"OK: {len(models)} models, {total_kb:,.1f} KB total, "
+                f"hero {hero['face_count']} faces / {hero['vertex_count']} verts")
+          for category in manifest["categories"]:
+              print(f"  - {category['label']:<38} {category['count']:>2} model(s)")
+          PY
+
+      - name: Upload generated assets (run artifact / build provenance)
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-glb-assets
+          path: |
+            public/assets/models/*.glb
+            public/assets/manifest.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Deploy public/ to the gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          publish_branch: gh-pages
+          # Keep the previous deploy online until the new one is fully built,
+          # then publish atomically (never a half-uploaded site).
+          keep_files: false
+          enable_jekyll: false
+          full_commit_message: "deploy: rebuild 3D gallery from Python generators (run ${{ github.run_number }})"
+          user_name: "github-actions[bot]"
+          user_email: "41898282+github-actions[bot]@users.noreply.github.com"

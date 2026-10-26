@@ -1,27 +1,21 @@
 # =============================================================================
-# Procedural 3D Asset Generator Studio — Production Dependencies (Python 3.11)
+# Procedural 3D Asset Forge — generation dependencies (Python 3.11)
 # -----------------------------------------------------------------------------
-# All packages below publish pre-built manylinux/macOS/Windows binary wheels
-# on Python 3.11 (.python-version = 3.11.11, runtime.txt = python-3.11.11),
-# preventing source tarball compilation (no gcc / gfortran required on Render):
+# Every model in public/assets/models/ is produced by these three libraries
+# alone. All of them publish manylinux / macOS / Windows wheels for CPython
+# 3.11, so `pip install --prefer-binary` never needs gcc/gfortran.
 #
-#     pip install --only-binary=:all: -r requirements.txt
+# Blender (`bpy`) and `fast-simplification` are deliberately NOT required:
+# geometry is authored analytically with numpy + scipy + trimesh, and polygon
+# budget enforcement uses a deterministic vertex-cluster pass instead of a
+# quadric simplifier, which keeps local and CI output byte-identical.
 # =============================================================================
 
-# Web API & ASGI server
-fastapi>=0.115.0,<1.0.0
-uvicorn[standard]>=0.34.0,<1.0.0
-pydantic>=2.10.0,<3.0.0
-pydantic-settings>=2.7.0,<3.0.0
-python-multipart>=0.0.18,<1.0.0
-httpx>=0.27.0,<1.0.0
+# Vectorized geometry math (loft profiles, heightfields, normals, vertex colors)
+numpy>=1.26.4,<3.0.0
 
-# Persistence
-sqlalchemy>=2.0.30,<2.1.0
-aiosqlite>=0.20.0,<1.0.0
+# Cubic spline anatomical profiles & 3D rotation helpers for the character rig
+scipy>=1.11.4,<2.0.0
 
-# Pure-Python 3D Procedural Geometry & Validation Core (binary wheels only)
-numpy>=1.26.4,<2.0.0
-scipy>=1.11.4,<1.16.0
-trimesh>=4.0.0,<5.0.0
-networkx>=3.2,<4.0.0
+# In-memory mesh assembly, watertight primitives, and GLB round-trip validation
+trimesh>=4.0.0,<6.0.0
