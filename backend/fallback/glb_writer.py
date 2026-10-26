@@ -18,6 +18,7 @@ combination with fully deterministic byte layout:
 
 from __future__ import annotations
 
+import io
 import json
 import struct
 from dataclasses import dataclass, field
@@ -44,6 +45,12 @@ def srgb_to_linear(value: float) -> float:
     return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
 
 
+def srgb_array_to_linear(rgb: np.ndarray) -> np.ndarray:
+    """Vectorized sRGB ``[..., 3]`` in ``[0, 1]`` -> glTF linear space."""
+    v = np.clip(np.asarray(rgb, dtype=np.float64), 0.0, 1.0)
+    return np.where(v <= 0.04045, v / 12.92, ((v + 0.055) / 1.055) ** 2.4)
+
+
 @dataclass
 class GlbMaterial:
     """A single glTF PBR material (colors supplied in sRGB space)."""
@@ -54,6 +61,7 @@ class GlbMaterial:
     roughness: float = 0.65
     emissive_srgb: tuple[float, float, float] | None = None
     double_sided: bool = False
+    vertex_color_albedo: bool = True
 
 
 @dataclass
@@ -133,15 +141,21 @@ def build_glb_bytes(parts: list[GlbPart], *, generator: str) -> bytes:
         if part.material.name not in material_index:
             mat = part.material
             r, g, b, a = mat.base_color_srgb
+            if mat.vertex_color_albedo:
+                # COLOR_0 already stores linear RGB vertex/face colors directly,
+                # so keep baseColorFactor neutral [1,1,1,a] to avoid color^2 darkening.
+                base_factor = [1.0, 1.0, 1.0, float(a)]
+            else:
+                base_factor = [
+                    round(srgb_to_linear(r), 6),
+                    round(srgb_to_linear(g), 6),
+                    round(srgb_to_linear(b), 6),
+                    float(a),
+                ]
             material_json: dict[str, Any] = {
                 "name": mat.name,
                 "pbrMetallicRoughness": {
-                    "baseColorFactor": [
-                        round(srgb_to_linear(r), 6),
-                        round(srgb_to_linear(g), 6),
-                        round(srgb_to_linear(b), 6),
-                        float(a),
-                    ],
+                    "baseColorFactor": base_factor,
                     "metallicFactor": float(np.clip(mat.metallic, 0.0, 1.0)),
                     "roughnessFactor": float(np.clip(mat.roughness, 0.04, 1.0)),
                 },
@@ -224,10 +238,17 @@ def build_glb_bytes(parts: list[GlbPart], *, generator: str) -> bytes:
     bin_bytes += b"\x00" * ((4 - len(bin_bytes) % 4) % 4)
 
     total_length = 12 + 8 + len(json_bytes) + 8 + len(bin_bytes)
-    out = bytearray()
-    out += struct.pack("<III", GLB_MAGIC, GLB_VERSION, total_length)
-    out += struct.pack("<II", len(json_bytes), CHUNK_JSON)
-    out += json_bytes
-    out += struct.pack("<II", len(bin_bytes), CHUNK_BIN)
-    out += bin_bytes
-    return bytes(out)
+    stream = io.BytesIO()
+    stream.write(struct.pack("<III", GLB_MAGIC, GLB_VERSION, total_length))
+    stream.write(struct.pack("<II", len(json_bytes), CHUNK_JSON))
+    stream.write(json_bytes)
+    stream.write(struct.pack("<II", len(bin_bytes), CHUNK_BIN))
+    stream.write(bin_bytes)
+    return stream.getvalue()
+
+
+def build_glb_stream(parts: list[GlbPart], *, generator: str) -> io.BytesIO:
+    """Serialize *parts* into an in-memory ``io.BytesIO`` binary ``.glb`` stream."""
+    buf = io.BytesIO(build_glb_bytes(parts, generator=generator))
+    buf.seek(0)
+    return buf

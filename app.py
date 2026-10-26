@@ -1,20 +1,24 @@
-"""ASGI entrypoint for the Procedural 3D Asset Generator Studio.
+"""Unified FastAPI ASGI entrypoint for Procedural 3D Asset Generator Studio.
 
-All supported server commands resolve to the same FastAPI application:
+Supports both Render and local start commands seamlessly:
 
-    uvicorn app:app         --host 0.0.0.0 --port $PORT   # Render default
-    uvicorn main:app        --host 0.0.0.0 --port $PORT   # via root main.py
-    uvicorn backend.main:app --host 0.0.0.0 --port $PORT  # package path
-    python app.py                                          # PORT env or 8000
+    uvicorn app:app --host 0.0.0.0 --port $PORT
+    uvicorn main:app --host 0.0.0.0 --port $PORT
+    python app.py
 """
 
 from __future__ import annotations
 
 import os
 
-from backend.main import app
+from fastapi import FastAPI
 
-__all__ = ["app"]
+from backend.main import app as _studio_app
+from backend.main import create_app
+
+app: FastAPI = _studio_app
+
+__all__ = ["app", "create_app"]
 
 if __name__ == "__main__":
     import uvicorn

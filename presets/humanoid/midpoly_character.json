@@ -1,0 +1,29 @@
+{
+  "id": "midpoly_character",
+  "name": "Mid-Poly Stylized Female T-Pose Character",
+  "category": "humanoid",
+  "description": "Articulated mid-poly stylized female character in a symmetrical horizontal T-pose with sculpted head, curved ponytail hair, neck, athletic sports top, toned waist, shorts/pelvis, upper/lower arms, hands, thighs, calves, and sneakers.",
+  "tags": ["character", "female", "t-pose", "mid-poly", "stylized", "humanoid"],
+  "quality_profile": "optimized_mid_poly",
+  "polygon_budget": 2200,
+  "material_preset": "cyber_arena",
+  "parameters": {
+    "gender": "female",
+    "pose": "t_pose",
+    "height": 1.72,
+    "musculature": 0.52,
+    "shoulder_width": 0.98,
+    "hip_width": 1.04,
+    "limb_length_scale": 1.0,
+    "ponytail_length": 1.0,
+    "flat_shading": true,
+    "skin_color": "#e6a88a",
+    "outfit_color": "#3b82f6",
+    "include_clothing": true,
+    "include_hair": true,
+    "include_shoes": true,
+    "include_armor": false,
+    "include_backpack": false,
+    "include_rig": true
+  }
+}

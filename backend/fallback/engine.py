@@ -27,6 +27,7 @@ grounded at ``Y = 0``.
 
 from __future__ import annotations
 
+import io
 import json
 import math
 import pathlib
@@ -37,13 +38,28 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+import scipy
 import trimesh
 
 from backend.blender.materials import THEME_PALETTES
-from backend.fallback.glb_writer import GlbMaterial, GlbPart, build_glb_bytes
+from backend.fallback.character_tpose import (
+    DEFAULT_OUTFIT_HEX,
+    DEFAULT_SKIN_HEX,
+    HEX_COLOR_RE,
+    build_character_palette,
+    build_stylized_female_tpose_parts,
+    parse_hex_color,
+)
+from backend.fallback.glb_writer import (
+    GlbMaterial,
+    GlbPart,
+    build_glb_bytes,
+    build_glb_stream,
+    srgb_array_to_linear,
+)
 
 ENGINE_NAME = "python_fallback"
-ENGINE_VERSION_LABEL = "PythonFallback/1.0"
+ENGINE_VERSION_LABEL = "PythonProcedural/1.1"
 
 # Category-default material themes — mirrored from the Blender generators.
 _CATEGORY_DEFAULT_THEME = {
@@ -84,13 +100,34 @@ _QUALITY = {
 }
 
 
+def _resolve_quality(quality_name: str, polygon_budget: int) -> _Quality:
+    base = _QUALITY.get(quality_name, _QUALITY["optimized_mid_poly"])
+    if polygon_budget <= 700:
+        return _Quality(radial=8, sphere_subdiv=1, terrain_res=15, scatter_mul=0.35, fingers=False)
+    if polygon_budget <= 1400:
+        return _Quality(radial=10, sphere_subdiv=2, terrain_res=21, scatter_mul=0.55, fingers=False)
+    if polygon_budget <= 2600:
+        return _Quality(radial=min(base.radial, 14), sphere_subdiv=2, terrain_res=28, scatter_mul=0.8, fingers=True)
+    return base
+
+
 # ---------------------------------------------------------------------------
-# Material resolution
+# Material resolution (with direct hex skin_color & outfit_color overrides)
 # ---------------------------------------------------------------------------
+
+
+def _extract_hex_override(cfg: dict[str, Any], key: str) -> str | None:
+    top_val = cfg.get(key)
+    param_val = cfg.get("parameters", {}).get(key)
+    for candidate in (top_val, param_val):
+        if isinstance(candidate, str) and candidate.strip() and HEX_COLOR_RE.match(candidate.strip()):
+            return candidate.strip()
+    return None
 
 
 def _resolve_materials(cfg: dict[str, Any]) -> dict[str, GlbMaterial]:
     category = str(cfg["category"])
+    preset_id = str(cfg.get("preset_id", ""))
     requested = str(cfg.get("material_preset", "default"))
     theme = requested if requested in THEME_PALETTES else _CATEGORY_DEFAULT_THEME[category]
     palette = THEME_PALETTES[theme]
@@ -113,7 +150,7 @@ def _resolve_materials(cfg: dict[str, Any]) -> dict[str, GlbMaterial]:
                 roughness=float(roughness),
                 emissive_srgb=(1.0, 0.72, 0.30) if slot == "glass_lamp" else None,
             ),
-    )
+        )
     # Guarantee the standard slots exist even for palettes that omit them.
     for slot, donor in (("metal", "secondary"), ("accent", "primary"), ("trim", "secondary")):
         if slot not in materials and donor in materials:
@@ -124,6 +161,61 @@ def _resolve_materials(cfg: dict[str, Any]) -> dict[str, GlbMaterial]:
                 metallic=d.metallic,
                 roughness=d.roughness,
             )
+
+    skin_hex = _extract_hex_override(cfg, "skin_color")
+    outfit_hex = _extract_hex_override(cfg, "outfit_color")
+
+    if category == "humanoid":
+        use_char_defaults = preset_id == "midpoly_character"
+        eff_skin = skin_hex or (DEFAULT_SKIN_HEX if use_char_defaults else None)
+        eff_outfit = outfit_hex or (DEFAULT_OUTFIT_HEX if use_char_defaults else None)
+        char_pal = build_character_palette(
+            skin_color=eff_skin or DEFAULT_SKIN_HEX,
+            outfit_color=eff_outfit or DEFAULT_OUTFIT_HEX,
+        )
+        for slot_name, (rgb, met, rough) in char_pal.items():
+            if slot_name == "skin" and eff_skin is None and not use_char_defaults:
+                continue
+            materials[slot_name] = GlbMaterial(
+                name=f"Mat_Char_{slot_name}",
+                base_color_srgb=(rgb[0], rgb[1], rgb[2], 1.0),
+                metallic=met,
+                roughness=rough,
+            )
+        if eff_outfit is not None:
+            materials["primary"] = materials["outfit"]
+            materials["secondary"] = materials["shorts"]
+            materials["accent"] = materials["outfit_accent"]
+            materials["trim"] = materials["sole"]
+    else:
+        if outfit_hex is not None:
+            orgb = parse_hex_color(outfit_hex, DEFAULT_OUTFIT_HEX)
+            materials["primary"] = GlbMaterial(
+                name=f"Mat_{theme}_primary_custom",
+                base_color_srgb=(orgb[0], orgb[1], orgb[2], 1.0),
+                metallic=materials["primary"].metallic,
+                roughness=materials["primary"].roughness,
+            )
+            materials["accent"] = GlbMaterial(
+                name=f"Mat_{theme}_accent_custom",
+                base_color_srgb=(
+                    min(1.0, orgb[0] * 1.12),
+                    min(1.0, orgb[1] * 1.12),
+                    min(1.0, orgb[2] * 1.12),
+                    1.0,
+                ),
+                metallic=materials["accent"].metallic,
+                roughness=materials["accent"].roughness,
+            )
+        if skin_hex is not None:
+            srgb = parse_hex_color(skin_hex, DEFAULT_SKIN_HEX)
+            materials["secondary"] = GlbMaterial(
+                name=f"Mat_{theme}_secondary_custom",
+                base_color_srgb=(srgb[0], srgb[1], srgb[2], 1.0),
+                metallic=materials["secondary"].metallic,
+                roughness=materials["secondary"].roughness,
+            )
+
     return materials
 
 
@@ -477,13 +569,28 @@ def _enforce_budget(
 
 
 # ---------------------------------------------------------------------------
-# Faceting: flat normals + triplanar UVs + per-face vertex colors
+# Shading & Vertex Colors: crisp faceted flat normals OR smooth welded normals
 # ---------------------------------------------------------------------------
+
+
+def _project_triplanar_uvs(positions: np.ndarray, normals: np.ndarray) -> np.ndarray:
+    mins = positions.min(axis=0)
+    span = np.maximum(positions.max(axis=0) - mins, 1e-6)
+    abs_n = np.abs(normals)
+    uvs = np.zeros((len(positions), 2), dtype=np.float64)
+    mask_z = (abs_n[:, 2] >= abs_n[:, 0]) & (abs_n[:, 2] >= abs_n[:, 1])
+    mask_x = (~mask_z) & (abs_n[:, 0] >= abs_n[:, 1])
+    mask_y = ~(mask_z | mask_x)
+    uvs[mask_z] = (positions[mask_z][:, [0, 1]] - mins[[0, 1]]) / span[[0, 1]]
+    uvs[mask_x] = (positions[mask_x][:, [2, 1]] - mins[[2, 1]]) / span[[2, 1]]
+    uvs[mask_y] = (positions[mask_y][:, [0, 2]] - mins[[0, 2]]) / span[[0, 2]]
+    return uvs
 
 
 def _facet_part(
     name: str, mesh: trimesh.Trimesh, material: GlbMaterial, rng: np.random.Generator
 ) -> GlbPart:
+    """Unmerge vertices per triangle and compute sharp per-face normals + direct face colors."""
     verts = np.asarray(mesh.vertices, dtype=np.float64)
     faces = np.asarray(mesh.faces, dtype=np.int64)
     corners = verts[faces]  # (F, 3, 3)
@@ -498,30 +605,21 @@ def _facet_part(
     positions = corners.reshape(-1, 3)
     normals = np.repeat(face_normals, 3, axis=0)
     indices = np.arange(len(positions), dtype=np.uint32).reshape(-1, 3)
+    uvs = _project_triplanar_uvs(positions, normals)
 
-    # Triplanar/box UV projection normalized per mesh (mirrors Blender path).
-    mins = positions.min(axis=0)
-    span = np.maximum(positions.max(axis=0) - mins, 1e-6)
-    abs_n = np.abs(normals)
-    uvs = np.zeros((len(positions), 2), dtype=np.float64)
-    mask_z = (abs_n[:, 2] >= abs_n[:, 0]) & (abs_n[:, 2] >= abs_n[:, 1])
-    mask_x = (~mask_z) & (abs_n[:, 0] >= abs_n[:, 1])
-    mask_y = ~(mask_z | mask_x)
-    uvs[mask_z] = (positions[mask_z][:, [0, 1]] - mins[[0, 1]]) / span[[0, 1]]
-    uvs[mask_x] = (positions[mask_x][:, [2, 1]] - mins[[2, 1]]) / span[[2, 1]]
-    uvs[mask_y] = (positions[mask_y][:, [0, 2]] - mins[[0, 2]]) / span[[0, 2]]
-
-    # Per-face vertex-color tint: near-white variation driven by face-normal
-    # elevation + deterministic jitter, multiplied with the PBR base color.
+    # Apply the material's sRGB color directly into COLOR_0 (converted to linear
+    # space per glTF 2.0 spec) with crisp per-facet elevation + micro-contrast.
+    base_rgb = np.asarray(material.base_color_srgb[:3], dtype=np.float64)
+    alpha = float(material.base_color_srgb[3])
     elev = 0.5 + 0.5 * face_normals[:, 1]
-    jitter = rng.uniform(-0.045, 0.045, size=len(faces))
-    shade = np.clip(0.84 + 0.16 * elev + jitter, 0.72, 1.0)
-    warm = np.clip(shade * rng.uniform(0.97, 1.0, size=len(faces)), 0.0, 1.0)
-    face_rgba = np.stack(
-        [np.clip(shade * 1.0, 0, 1), np.clip(shade * 0.995, 0, 1), warm, np.ones(len(faces))],
-        axis=1,
-    )
-    colors = (np.repeat(face_rgba, 3, axis=0) * 255.0).astype(np.uint8)
+    key_dir = np.clip(0.35 * face_normals[:, 0] + 0.55 * face_normals[:, 1] + 0.45 * face_normals[:, 2], -0.5, 1.0)
+    jitter = rng.uniform(-0.025, 0.025, size=len(faces))
+    shade = np.clip(0.90 + 0.08 * elev + 0.04 * key_dir + jitter, 0.78, 1.06)
+
+    face_srgb = np.clip(base_rgb[None, :] * shade[:, None], 0.0, 1.0)
+    face_lin = srgb_array_to_linear(face_srgb)
+    face_rgba = np.concatenate([face_lin, np.full((len(faces), 1), alpha)], axis=1)
+    colors = np.round(np.repeat(face_rgba, 3, axis=0) * 255.0).clip(0, 255).astype(np.uint8)
 
     return GlbPart(
         name=name,
@@ -532,6 +630,54 @@ def _facet_part(
         indices=indices,
         material=material,
     )
+
+
+def _smooth_part(name: str, mesh: trimesh.Trimesh, material: GlbMaterial) -> GlbPart:
+    """Keep shared welded vertices and compute smooth vertex normals + direct vertex colors."""
+    welded = mesh.copy()
+    try:
+        welded.merge_vertices()
+    except Exception:
+        pass
+    positions = np.asarray(welded.vertices, dtype=np.float64)
+    indices = np.asarray(welded.faces, dtype=np.uint32)
+    v_normals = np.asarray(welded.vertex_normals, dtype=np.float64)
+    n_len = np.linalg.norm(v_normals, axis=1, keepdims=True)
+    normals = np.divide(v_normals, np.maximum(n_len, 1e-12), out=np.zeros_like(v_normals), where=n_len > 0)
+    normals[n_len.reshape(-1) <= 1e-12] = (0.0, 1.0, 0.0)
+    uvs = _project_triplanar_uvs(positions, normals)
+
+    base_rgb = np.asarray(material.base_color_srgb[:3], dtype=np.float64)
+    alpha = float(material.base_color_srgb[3])
+    elev = 0.5 + 0.5 * normals[:, 1]
+    shade = np.clip(0.92 + 0.08 * elev, 0.84, 1.04)
+    vert_srgb = np.clip(base_rgb[None, :] * shade[:, None], 0.0, 1.0)
+    vert_lin = srgb_array_to_linear(vert_srgb)
+    vert_rgba = np.concatenate([vert_lin, np.full((len(positions), 1), alpha)], axis=1)
+    colors = np.round(vert_rgba * 255.0).clip(0, 255).astype(np.uint8)
+
+    return GlbPart(
+        name=name,
+        positions=positions.astype(np.float32),
+        normals=normals.astype(np.float32),
+        uvs=uvs.astype(np.float32),
+        colors=colors,
+        indices=indices,
+        material=material,
+    )
+
+
+def _mesh_to_glb_part(
+    name: str,
+    mesh: trimesh.Trimesh,
+    material: GlbMaterial,
+    rng: np.random.Generator,
+    *,
+    flat_shading: bool = True,
+) -> GlbPart:
+    if flat_shading:
+        return _facet_part(name, mesh, material, rng)
+    return _smooth_part(name, mesh, material)
 
 
 # ---------------------------------------------------------------------------
@@ -1340,6 +1486,29 @@ def _build_environment(scene: _SceneBuilder, cfg: dict[str, Any], q: _Quality, r
 
 def _build_humanoid(scene: _SceneBuilder, cfg: dict[str, Any], q: _Quality, rng: np.random.Generator) -> None:
     p = cfg["parameters"]
+    preset_id = str(cfg.get("preset_id", ""))
+    pose = str(p.get("pose", "t_pose" if preset_id == "midpoly_character" else "a_pose"))
+    polygon_budget = int(cfg.get("polygon_budget", 2200))
+
+    if preset_id == "midpoly_character" or pose == "t_pose":
+        tpose_parts = build_stylized_female_tpose_parts(
+            target_faces=polygon_budget,
+            height=float(p.get("height", 1.72)),
+            rng=rng,
+            parameters=p,
+        )
+        for part_name, slot_name, mesh in tpose_parts:
+            resolved_slot = slot_name if slot_name in scene.materials else "skin"
+            scene.add(part_name, resolved_slot, mesh)
+
+        H = float(p.get("height", 1.72))
+        chest_y = 0.725 * H
+        if bool(p.get("include_armor", False)):
+            scene.add("Armor", "metal", _sphere((0.105 * H, 0.095 * H, 0.072 * H), (0, chest_y, 0.012 * H), max(1, q.sphere_subdiv - 1)))
+        if bool(p.get("include_backpack", False)):
+            scene.add("Backpack", "accent", _box((0.16 * H, 0.22 * H, 0.085 * H), (0, chest_y, -0.095 * H)))
+        return
+
     H = float(p.get("height", 1.78))
     muscle = float(p.get("musculature", 0.55))
     female = str(p.get("gender", "male")) == "female"
@@ -1458,16 +1627,12 @@ _BUILDERS: dict[str, Callable[[_SceneBuilder, dict[str, Any], _Quality, np.rando
 }
 
 
-def generate_asset_python(
-    job_config_path: pathlib.Path,
-    output_dir: pathlib.Path,
+def generate_glb_in_memory(
+    cfg: dict[str, Any],
     on_progress: Callable[[str, int, str], None] | None = None,
     should_cancel: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
-    """Generate one asset with the pure-Python engine; mirror Blender payload.
-
-    Runs synchronously (callers dispatch it via ``asyncio.to_thread``).
-    """
+    """Generate a mid-poly 3D model purely in memory (`io.BytesIO`) and return live topology stats."""
 
     def emit(stage: str, pct: int, message: str) -> None:
         if on_progress is not None:
@@ -1478,67 +1643,69 @@ def generate_asset_python(
             raise InterruptedError("Generation cancelled by user.")
 
     t0 = time.perf_counter()
-    cfg = json.loads(job_config_path.read_text(encoding="utf-8"))
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     category = str(cfg["category"])
     preset_id = str(cfg["preset_id"])
-    quality = _QUALITY.get(str(cfg.get("quality_profile", "optimized_mid_poly")), _QUALITY["optimized_mid_poly"])
+    polygon_budget = int(cfg.get("polygon_budget") or cfg.get("target_faces") or 2200)
+    quality = _resolve_quality(str(cfg.get("quality_profile", "optimized_mid_poly")), polygon_budget)
     seed = int(cfg.get("seed", 42))
-    polygon_budget = int(cfg.get("polygon_budget", 4000))
+    params = cfg.get("parameters", {})
+    flat_shading = bool(
+        cfg["flat_shading"]
+        if "flat_shading" in cfg and cfg["flat_shading"] is not None
+        else params.get("flat_shading", True)
+    )
+
     seed_entropy = (seed ^ zlib.crc32(preset_id.encode("utf-8"))) & 0x7FFFFFFF
     rng = np.random.default_rng(seed_entropy)
 
-    emit("initializing", 10, f"Initializing pure-Python engine (trimesh {trimesh.__version__}, numpy {np.__version__})...")
+    emit(
+        "initializing",
+        10,
+        f"Initializing pure-Python engine (numpy {np.__version__}, scipy {scipy.__version__}, trimesh {trimesh.__version__})...",
+    )
     check_cancel()
     materials = _resolve_materials(cfg)
     scene = _SceneBuilder(materials)
 
-    emit("geometry", 32, f"Generating procedural {category} geometry ({preset_id}) with NumPy + Trimesh...")
+    emit("geometry", 32, f"Generating procedural {category} geometry ({preset_id}) in memory...")
     builder = _BUILDERS.get(category)
     if builder is None:
-        raise ValueError(f"Unsupported asset category for Python fallback engine: {category!r}")
+        raise ValueError(f"Unsupported asset category for Python procedural engine: {category!r}")
     builder(scene, cfg, quality, rng)
     check_cancel()
 
     parts = scene.merged_parts()
     if not parts:
-        raise RuntimeError("Python fallback generator produced zero mesh parts.")
+        raise RuntimeError("Python procedural generator produced zero mesh parts.")
 
     raw_total = sum(len(m.faces) for _, _, m in parts)
     if raw_total > polygon_budget:
-        emit("decimating", 58, f"Decimating {raw_total:,} triangles toward budget {polygon_budget:,} (vertex clustering)...")
+        emit("decimating", 58, f"Targeting {polygon_budget:,} faces from {raw_total:,} raw faces...")
         parts = _enforce_budget(parts, polygon_budget)
     check_cancel()
 
-    emit("inspecting", 68, "Faceting flat normals, projecting UVs, and assigning vertex colors...")
+    shading_desc = "flat faceted face normals" if flat_shading else "smooth welded vertex normals"
+    emit("inspecting", 68, f"Computing {shading_desc}, projecting UVs, and encoding vertex colors...")
     glb_parts = [
-        _facet_part(name, mesh, materials[slot], rng) for name, slot, mesh in parts
+        _mesh_to_glb_part(name, mesh, materials[slot], rng, flat_shading=flat_shading)
+        for name, slot, mesh in parts
     ]
 
-    emit("exporting_glb", 80, "Serializing glTF 2.0 binary (.glb) for Godot 4...")
-    glb_bytes = build_glb_bytes(
+    emit("exporting_glb", 82, "Serializing glTF 2.0 binary (.glb) into io.BytesIO stream...")
+    glb_stream: io.BytesIO = build_glb_stream(
         glb_parts,
-        generator=f"AssetsGenPro {ENGINE_VERSION_LABEL} (numpy+trimesh, no Blender runtime)",
+        generator=f"AssetsGenPro {ENGINE_VERSION_LABEL} (numpy+scipy+trimesh)",
     )
-    glb_filename = f"{cfg['asset_id']}.glb"
-    glb_path = output_dir / glb_filename
-    glb_path.write_bytes(glb_bytes)
+    glb_bytes = glb_stream.getvalue()
+    glb_stream.seek(0)
     check_cancel()
 
-    if bool(cfg.get("save_blend", False)):
-        emit(
-            "saving_blend",
-            88,
-            "Native .blend export requires the Blender engine; skipping in Python fallback mode.",
-        )
-
-    emit("verifying_reimport", 93, "Re-loading exported GLB with Trimesh to verify roundtrip integrity...")
+    emit("verifying_reimport", 93, "Verifying in-memory GLB roundtrip integrity with Trimesh...")
     diagnostics, reimport = _measure_diagnostics(category, parts, glb_parts, materials, glb_bytes)
 
     fallbacks = [
-        "blender_core: Blender runtime not installed; generated with the pure-Python NumPy+Trimesh engine",
-        "gltf2_exporter: replaced by the built-in deterministic glTF 2.0 binary writer",
+        "blender_core: Blender runtime not installed; generated with the pure-Python NumPy+SciPy+Trimesh engine",
+        "gltf2_exporter: serialized in-memory via the built-in deterministic glTF 2.0 binary writer",
     ]
     if category in ("architecture", "props"):
         fallbacks.append("native_boolean: CSG replaced by analytic multi-part construction")
@@ -1546,10 +1713,57 @@ def generate_asset_python(
     if category in ("architecture", "environment"):
         fallbacks.append("geometry_nodes: procedural graphs replaced by NumPy heightfield/scatter synthesis")
     if category == "humanoid":
-        fallbacks.append("mpfb: MakeHuman unavailable; used stylized anatomical capsule/ellipsoid humanoid")
-        fallbacks.append("rigify: skinned armature requires the Blender engine; exported static A-pose character")
+        pose_label = "symmetrical T-pose" if preset_id == "midpoly_character" else "stylized A-pose"
+        fallbacks.append(f"mpfb: MakeHuman unavailable; constructed spline-lofted anatomical humanoid ({pose_label})")
+        fallbacks.append(f"rigify: skinned armature requires Blender runtime; exported static {pose_label} character")
 
     elapsed = round(time.perf_counter() - t0, 3)
+    return {
+        "glb_stream": glb_stream,
+        "glb_bytes": glb_bytes,
+        "vertices": int(diagnostics["actual_vertices"]),
+        "faces": int(diagnostics["polygon_faces"]),
+        "triangles": int(diagnostics["actual_triangles"]),
+        "file_size_bytes": len(glb_bytes),
+        "file_size_kb": round(len(glb_bytes) / 1024.0, 2),
+        "flat_shading": flat_shading,
+        "generation_engine": ENGINE_NAME,
+        "blender_version": ENGINE_VERSION_LABEL,
+        "generation_time_seconds": elapsed,
+        "capabilities_used": ["python_fallback_engine", "numpy", "scipy", "trimesh"],
+        "capabilities_fallback": fallbacks,
+        "scene_diagnostics": diagnostics,
+        "reimport_check": reimport,
+    }
+
+
+def generate_asset_python(
+    job_config_path: pathlib.Path,
+    output_dir: pathlib.Path,
+    on_progress: Callable[[str, int, str], None] | None = None,
+    should_cancel: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
+    """Generate one asset with the pure-Python engine; mirror Blender payload.
+
+    Runs synchronously (callers dispatch it via ``asyncio.to_thread``).
+    """
+    cfg = json.loads(job_config_path.read_text(encoding="utf-8"))
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    mem = generate_glb_in_memory(cfg, on_progress=on_progress, should_cancel=should_cancel)
+    glb_bytes: bytes = mem["glb_bytes"]
+    glb_filename = f"{cfg['asset_id']}.glb"
+    (output_dir / glb_filename).write_bytes(glb_bytes)
+
+    if bool(cfg.get("save_blend", False)) and on_progress is not None:
+        on_progress(
+            "saving_blend",
+            88,
+            "Native .blend export requires the Blender engine; skipping in Python procedural mode.",
+        )
+
+    diagnostics = mem["scene_diagnostics"]
+    elapsed = mem["generation_time_seconds"]
     payload: dict[str, Any] = {
         "success": True,
         "generation_engine": ENGINE_NAME,
@@ -1559,15 +1773,20 @@ def generate_asset_python(
         "glb_size_bytes": len(glb_bytes),
         "blend_filename": None,
         "blend_size_bytes": None,
-        "capabilities_used": ["python_fallback_engine", "trimesh", "numpy"],
-        "capabilities_fallback": fallbacks,
+        "capabilities_used": mem["capabilities_used"],
+        "capabilities_fallback": mem["capabilities_fallback"],
         "scene_diagnostics": diagnostics,
-        "reimport_check": reimport,
+        "reimport_check": mem["reimport_check"],
     }
     (output_dir / "generation_result.json").write_text(
         json.dumps(payload, indent=2), encoding="utf-8"
     )
-    emit("completed", 100, f"Generated {diagnostics['actual_triangles']:,} triangles in {elapsed:.2f}s (Python fallback engine).")
+    if on_progress is not None:
+        on_progress(
+            "completed",
+            100,
+            f"Generated {diagnostics['actual_triangles']:,} triangles in {elapsed:.2f}s (Python procedural engine).",
+        )
     return payload
 
 

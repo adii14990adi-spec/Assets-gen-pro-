@@ -13,7 +13,7 @@ An end-to-end procedural 3D game asset studio engineered for **Godot 4 Android B
 | **3D Engine** | Blender **4.2.23 LTS** (`bpy==4.2.23` isolated Python 3.11 runtime or standalone `blender` 4.2+ CLI) | Never imported inside the FastAPI web server process; executed strictly in isolated background subprocesses. |
 | **Procedural Geometry** | `bmesh`, `numpy==1.26.4`, Blender **Geometry Nodes**, Exact **Boolean** CSG, **Skin + Subsurf** modifiers | Deterministic seeded generation across all 4 categories. |
 | **Blender Extensions** | `io_scene_gltf2`, `rigify`, `mesh_looptools` (GPL-2.0+), `object_boolean_tools` (GPL-2.0+), optional `mpfb` | Dynamically probed and verified at runtime via the **Capability Registry** with honest fallback adapters. |
-| **Fallback 3D Engine** | Pure-Python NumPy + Trimesh procedural engine (`backend/fallback/`) | Generates all 17 presets as validated binary `.glb` (flat-shaded normals, vertex colors, PBR materials, decimation to budget) when no Blender runtime exists — e.g. **Render Native Python**. Selected automatically (`STUDIO_GENERATION_ENGINE=auto`). |
+| **Pure-Python 3D Engine** | NumPy + SciPy + Trimesh procedural engine (`backend/fallback/engine.py`, `backend/fallback/character_tpose.py`) | Generates all **18 presets** (including the spline-lofted **Mid-Poly Stylized Female T-Pose Character**) in memory (`io.BytesIO`) as validated binary `.glb` files with configurable `target_faces`, `flat_shading`, `skin_color`, `outfit_color`, and `seed` — zero Blender installation required on **Render Native Python**. |
 | **Mesh Validation** | `trimesh>=4,<5`, `scipy>=1.11.4,<1.16`, optional `pymeshlab` (`requirements-optional.txt`), glTF 2.0 binary chunk inspector + roundtrip re-import | Measures **actual** triangle/vertex counts, winding, manifoldness, UVs, transforms, and normalized 4-bone skin weights. |
 | **Backend API & Queue** | Python **3.11.11** (pinned via `.python-version` / `runtime.txt`), `fastapi>=0.115`, `pydantic>=2.11`, `sqlalchemy>=2.0` (SQLite WAL / PostgreSQL) — all binary-wheel installs | Async bounded worker pool, Server-Sent Events (SSE), WebSocket job progress, retries, timeouts, and cancellation. |
 | **Interactive 3D Frontend** | React **18.3**, TypeScript **5.7**, Vite **6.0**, Three.js **0.170**, `@react-three/fiber`, `@react-three/drei` | Loads the exact generated `.glb` binary, supports Material / Solid / Wireframe / Rig views, 6 camera presets, and revokes blob URLs cleanly. |
@@ -21,10 +21,10 @@ An end-to-end procedural 3D game asset studio engineered for **Godot 4 Android B
 
 ---
 
-## Asset Categories & Presets (17 Presets)
+## Asset Categories & Presets (18 Presets)
 
 ### 1. Humanoid Characters (`humanoid`)
-- **Presets**: `athletic_male_combatant`, `athletic_female_scout`, `armored_squad_leader`
+- **Presets**: `midpoly_character` (*Mid-Poly Stylized Female T-Pose Character*), `athletic_male_combatant`, `athletic_female_scout`, `armored_squad_leader`
 - **Features**: Single-piece connected watertight anatomical mesh (pelvis, abdomen, ribcage, chest, neck, sculpted head, shoulders, arms, forearms, palms, **5 articulated fingers per hand**, thighs, knees, calves, ankles, heels, feet), NumPy muscle-group harmonic sculpting, fitted tactical shirt & cargo trousers, combat boots, sculpted hair, plate-carrier armor vest, survival backpack, and **31-bone Godot 4 `SkeletonProfileHumanoid`-compatible Armature** with normalized max-4 bone weights and an exported `IdleReady` animation clip.
 
 ### 2. Rajasthani, Indian & Modular Architecture (`architecture`)
@@ -83,7 +83,31 @@ npm run dev
 
 Open `http://localhost:5173` (or run production single-port mode after `cd frontend && npm run build` at `http://localhost:8000`).
 
----
+## Direct Live Generation API (`POST /api/generate`)
+
+Generate a mid-poly 3D model in memory and receive JSON with `glb_base64`, `glb_url`, and live topology stats (`vertices`, `faces`, `triangles`, `file_size_kb`):
+
+```bash
+curl -X POST http://localhost:8000/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "preset": "midpoly_character",
+    "target_faces": 1800,
+    "flat_shading": true,
+    "skin_color": "#e6a88a",
+    "outfit_color": "#3b82f6",
+    "seed": 42
+  }'
+```
+
+Or stream the binary `.glb` (`model/gltf-binary`) directly:
+
+```bash
+curl -X POST "http://localhost:8000/api/generate?format=glb" \
+  -H "Content-Type: application/json" \
+  -d '{"preset": "midpoly_character", "target_faces": 1800, "flat_shading": true, "seed": 42}' \
+  --output midpoly_character.glb
+```
 
 ---
 
