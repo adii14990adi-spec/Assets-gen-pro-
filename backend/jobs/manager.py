@@ -132,7 +132,7 @@ class JobManager:
             execution_mode=normalized_req.execution_mode,
             stage="queued",
             progress_pct=2,
-            message="Job validated and queued for Blender execution.",
+            message="Job validated and queued for 3D generation.",
             request=normalized_req,
             created_at=now,
             logs=[
@@ -284,7 +284,7 @@ class JobManager:
                 self._append_log(job, "validating", 93, "Running independent Trimesh & GLB binary validation...")
                 glb_temp_path = workdir / blender_res["glb_filename"]
                 if not glb_temp_path.exists() or glb_temp_path.stat().st_size == 0:
-                    raise RuntimeError("Output GLB file missing or empty after Blender execution.")
+                    raise RuntimeError("Output GLB file missing or empty after generation.")
 
                 stats, validation = validate_generated_asset(
                     glb_path=glb_temp_path,

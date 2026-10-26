@@ -1,0 +1,66 @@
+# =============================================================================
+# Render Blueprint — Procedural 3D Asset Generator Studio (1-click deploy)
+# -----------------------------------------------------------------------------
+# Default service: Native Python on the Free tier.
+#   * Python is pinned to 3.11.11 (PYTHON_VERSION below + `.python-version`
+#     + `runtime.txt`). Without the pin Render would select its newest
+#     interpreter, numpy/scipy would fall back to source builds, and the
+#     build would fail with `ERROR: Unknown compiler(s): [['gfortran']]`.
+#   * Dependencies install from pre-compiled wheels only
+#     (`--prefer-binary`); every pin in requirements.txt ships cp311 wheels.
+#   * Render's Python runtime has no `blender` binary, so generation
+#     automatically uses the built-in pure-Python NumPy+Trimesh engine
+#     (STUDIO_GENERATION_ENGINE=auto). All 17 presets produce validated
+#     binary .glb files; only Blender-only extras (skinned rigs, native
+#     .blend files) require the Docker deployment below.
+#   * If `frontend/dist` is not built, `GET /` serves the built-in
+#     fallback Three.js studio — the deploy is usable as-is.
+#   * Free-tier filesystem is ephemeral: generated assets under
+#     `storage_data/` reset on redeploy/restart. Attach a paid persistent
+#     disk or set STUDIO_PUBLIC_STORAGE_BASE_URL + object storage for
+#     durable public hosting (see docs/DEPLOYMENT.md).
+# =============================================================================
+
+services:
+  - type: web
+    name: assets-gen-pro
+    runtime: python
+    plan: free
+    buildCommand: pip install --upgrade pip setuptools wheel && pip install --prefer-binary -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.11"
+      - key: PYTHONUNBUFFERED
+        value: "true"
+      # auto = Blender when present, otherwise pure-Python fallback engine.
+      - key: STUDIO_GENERATION_ENGINE
+        value: auto
+      # Free tier has ~512 MB RAM — serialize generation jobs.
+      - key: STUDIO_MAX_CONCURRENT_JOBS
+        value: "1"
+      - key: STUDIO_JOB_TIMEOUT_SECONDS
+        value: "180"
+
+  # ---------------------------------------------------------------------------
+  # ALTERNATIVE: Docker deployment with headless Blender 4.2 LTS + the full
+  # React Three Fiber studio. To use it, COMMENT OUT the service above and
+  # UNCOMMENT this one (blueprints cannot host two services with one name),
+  # or create a separate Docker web service in the Render dashboard pointing
+  # at ./Dockerfile. Note: the Blender image is large (~2 GB); first build
+  # on the free tier is slow. Build ./Dockerfile with
+  # `--target runtime-lite` locally for the Blender-free variant.
+  # ---------------------------------------------------------------------------
+  # - type: web
+  #   name: assets-gen-pro
+  #   runtime: docker
+  #   plan: free
+  #   dockerfilePath: ./Dockerfile
+  #   dockerContext: .
+  #   healthCheckPath: /api/health
+  #   envVars:
+  #     - key: STUDIO_GENERATION_ENGINE
+  #       value: auto
+  #     - key: STUDIO_MAX_CONCURRENT_JOBS
+  #       value: "1"

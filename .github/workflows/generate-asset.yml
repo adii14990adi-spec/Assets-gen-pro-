@@ -79,34 +79,46 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install system OpenGL & X11 client runtime libraries
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libgl1 libopengl0 libglx0 libglu1-mesa libxrender1 libxi6 libxkbcommon0 libsm6 libice6 libxxf86vm1 libxfixes3 libxt6
+            libgl1 libopengl0 libglx0 libglu1-mesa libxrender1 libxi6 libxkbcommon0 libsm6 libice6 libxxf86vm1 libxfixes3 libxt6 libxrandr2
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python (pinned via .python-version)
+        uses: actions/setup-python@v7
         with:
-          python-version: "3.11"
+          python-version-file: ".python-version"
           cache: "pip"
           cache-dependency-path: requirements.txt
 
-      - name: Install backend validation dependencies
+      - name: Install backend validation dependencies (binary wheels)
         run: |
           python -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -r requirements.txt
+          .venv/bin/pip install --upgrade pip setuptools wheel
+          .venv/bin/pip install --prefer-binary -r requirements.txt
 
+      # Blender is the primary engine for dispatched generation, but a
+      # runtime bootstrap failure must not waste the whole run: the
+      # dual-engine dispatcher (STUDIO_GENERATION_ENGINE=auto) falls back
+      # to the pure-Python engine and still produces a validated GLB.
       - name: Set up isolated Blender 4.2.23 LTS runtime & extensions
+        id: blender_setup
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: .venv/bin/python scripts/setup_blender_runtime.py --runtime-dir "$HOME/.local/blender-runtime"
 
-      - name: Validate dispatch inputs & run Blender procedural generation
+      - name: Note Python fallback when Blender setup failed
+        if: steps.blender_setup.outcome != 'success'
+        run: |
+          echo "::warning::Blender runtime setup failed; generation will use the pure-Python NumPy+Trimesh fallback engine (static humanoids, no .blend file)."
+
+      - name: Validate dispatch inputs & run procedural generation
         env:
+          STUDIO_GENERATION_ENGINE: auto
           INPUT_CATEGORY: ${{ inputs.category }}
           INPUT_PRESET: ${{ inputs.preset }}
           INPUT_QUALITY: ${{ inputs.quality_profile }}
@@ -146,7 +158,7 @@ jobs:
           print(f"## Generated 3D Asset: {m['name']}")
           print(f"- **Category / Preset**: `{m['category']}` / `{m['preset_id']}`")
           print(f"- **Quality Profile**: `{m['quality_profile']}` (Seed `{m['seed']}`)")
-          print(f"- **Blender Runtime**: `{m['blender_version']}` ({m['generation_time_seconds']}s)")
+          print(f"- **Generation Engine**: `{m['blender_version']}` ({m['generation_time_seconds']}s) via {', '.join(m.get('capabilities_used', []))}")
           print(f"- **GLB Output**: `{m['glb_filename']}` ({m['glb_size_bytes']:,} bytes)")
           if m.get("blend_filename"):
               print(f"- **Blender Project**: `{m['blend_filename']}` ({m['blend_size_bytes']:,} bytes)")
@@ -160,7 +172,7 @@ jobs:
           PY
 
       - name: Upload generated GLB, BLEND, and Metadata artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: asset-${{ inputs.preset }}-seed-${{ inputs.seed }}-run-${{ github.run_number }}
           path: |

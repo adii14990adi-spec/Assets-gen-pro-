@@ -51,3 +51,35 @@ Every modeling extension and mesh-processing library sits behind an explicit ada
 2. **Mobile Renderer (`Mobile` / `gl_compatibility`)**: Materials use standard glTF 2.0 `pbrMetallicRoughness` factors plus lightweight `128×128` embedded PNG grain textures—zero custom Blender node shaders that fail glTF export.
 3. **Humanoid Retargeting**: Rigged characters use standard `Root -> Hips -> Spine -> Chest -> UpperChest -> Neck -> Head`, `Left/RightShoulder -> UpperArm -> LowerArm -> Hand -> 5 Fingers`, and `Left/RightUpperLeg -> LowerLeg -> Foot` hierarchy with strictly `<= 4` normalized bone influences per vertex (`JOINTS_0` / `WEIGHTS_0`). In Godot 4's Advanced Import dialog, assign a `SkeletonProfileHumanoid` resource for immediate animation retargeting.
 4. **Mid-Poly Preservation**: Articulated characters are **never** passed through destructive mesh decimation; polygon counts are controlled cleanly via subdivision levels (`Prototype`, `Optimized Mid-Poly`, `Detailed Mid-Poly`) and equipment toggles so joint deformation loops remain intact.
+
+## 4. Dual-Engine Generation (Blender & Pure-Python Fallback)
+
+`backend/blender/runtime.py` selects the engine per job
+(`STUDIO_GENERATION_ENGINE=auto|blender|python`):
+
+1. **Blender engine** — used when a `blender` CLI, the isolated
+   `bpy==4.2.23` venv (`BLENDER_PYTHON_EXECUTABLE`), or an importable `bpy`
+   module is detected (via `importlib.util.find_spec`, never by importing
+   `bpy` into the web process). Full BMesh/Geometry Nodes/Boolean pipeline
+   with Rigify-compatible skinned humanoids, PBR textures, roundtrip
+   re-import verification, and optional native `.blend` output.
+2. **Python fallback engine** (`backend/fallback/`) — used automatically
+   when no Blender runtime exists (Render Native Python, slim CI).
+   Deterministic seeded builders for all 17 presets author geometry
+   directly in glTF space (meters, Y-up) from Trimesh primitives, custom
+   closed-solid heightfields, and capsule/ellipsoid characters; a NumPy
+   vertex-clustering decimator enforces polygon budgets; meshes are
+   faceted (flat normals), triplanar-UV-projected, vertex-colored, and
+   serialized by a dedicated glTF 2.0 writer (`POSITION`/`NORMAL`/
+   `TEXCOORD_0`/`COLOR_0` + named `pbrMetallicRoughness` materials).
+   Diagnostics are measured with Trimesh (including a real GLB reload
+   roundtrip), so both engines feed the identical validator, job manager,
+   schemas, and frontend. Blender-only features (armature skinning,
+   `.blend` files, embedded textures) are declared in
+   `capabilities_fallback` — never silently faked.
+
+Engine identity is observable everywhere: `GET /api/health`
+(`generation_engine`, `blender_available`, `python_fallback_available`),
+`GET /api/capabilities` (`python_fallback_engine` capability), and each
+asset's metadata (`capabilities_used`, `blender_version` =
+`PythonFallback/1.0` under the fallback engine).

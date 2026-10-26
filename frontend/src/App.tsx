@@ -369,14 +369,20 @@ export const App: React.FC = () => {
 
         <div className="header-actions">
           <span
-            className={`runtime-badge ${health?.blender_available ? "online" : "offline"}`}
-            title="Blender Backend Worker Status"
+            className={`runtime-badge ${
+              health?.blender_available || health?.python_fallback_available ? "online" : "offline"
+            }`}
+            title="3D Generation Engine Status (Blender 4.2 LTS or Pure-Python fallback)"
           >
             <Activity size={13} />
             <span>
-              {health?.blender_available
-                ? `Blender ${health.blender_version} Ready`
-                : "Checking Blender Runtime..."}
+              {!health
+                ? "Checking Generation Engine..."
+                : health.blender_available
+                  ? `Blender ${health.blender_version} Ready`
+                  : health.python_fallback_available
+                    ? "Python Fallback Engine Ready"
+                    : "No Generation Engine Available"}
             </span>
           </span>
 

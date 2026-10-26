@@ -13,8 +13,9 @@ An end-to-end procedural 3D game asset studio engineered for **Godot 4 Android B
 | **3D Engine** | Blender **4.2.23 LTS** (`bpy==4.2.23` isolated Python 3.11 runtime or standalone `blender` 4.2+ CLI) | Never imported inside the FastAPI web server process; executed strictly in isolated background subprocesses. |
 | **Procedural Geometry** | `bmesh`, `numpy==1.26.4`, Blender **Geometry Nodes**, Exact **Boolean** CSG, **Skin + Subsurf** modifiers | Deterministic seeded generation across all 4 categories. |
 | **Blender Extensions** | `io_scene_gltf2`, `rigify`, `mesh_looptools` (GPL-2.0+), `object_boolean_tools` (GPL-2.0+), optional `mpfb` | Dynamically probed and verified at runtime via the **Capability Registry** with honest fallback adapters. |
-| **Mesh Validation** | `trimesh==4.6.6`, `pymeshlab==2023.12.post3`, `scipy==1.15.2`, glTF 2.0 binary chunk inspector + Blender roundtrip re-import | Measures **actual** triangle/vertex counts, winding, manifoldness, UVs, transforms, and normalized 4-bone skin weights. |
-| **Backend API & Queue** | Python **3.11**, `fastapi==0.115.12`, `pydantic==2.11.3`, `sqlalchemy==2.0.40` (SQLite WAL / PostgreSQL) | Async bounded worker pool, Server-Sent Events (SSE), WebSocket job progress, retries, timeouts, and cancellation. |
+| **Fallback 3D Engine** | Pure-Python NumPy + Trimesh procedural engine (`backend/fallback/`) | Generates all 17 presets as validated binary `.glb` (flat-shaded normals, vertex colors, PBR materials, decimation to budget) when no Blender runtime exists — e.g. **Render Native Python**. Selected automatically (`STUDIO_GENERATION_ENGINE=auto`). |
+| **Mesh Validation** | `trimesh>=4,<5`, `scipy>=1.11.4,<1.16`, optional `pymeshlab` (`requirements-optional.txt`), glTF 2.0 binary chunk inspector + roundtrip re-import | Measures **actual** triangle/vertex counts, winding, manifoldness, UVs, transforms, and normalized 4-bone skin weights. |
+| **Backend API & Queue** | Python **3.11.11** (pinned via `.python-version` / `runtime.txt`), `fastapi>=0.115`, `pydantic>=2.11`, `sqlalchemy>=2.0` (SQLite WAL / PostgreSQL) — all binary-wheel installs | Async bounded worker pool, Server-Sent Events (SSE), WebSocket job progress, retries, timeouts, and cancellation. |
 | **Interactive 3D Frontend** | React **18.3**, TypeScript **5.7**, Vite **6.0**, Three.js **0.170**, `@react-three/fiber`, `@react-three/drei` | Loads the exact generated `.glb` binary, supports Material / Solid / Wireframe / Rig views, 6 camera presets, and revokes blob URLs cleanly. |
 | **CI/CD** | GitHub Actions (`.github/workflows/ci.yml` & `.github/workflows/generate-asset.yml`) | Automated linting, TypeScript & Vitest checks, Blender smoke test, E2E pytest suite, and manual `workflow_dispatch` asset packaging. |
 
@@ -83,6 +84,38 @@ npm run dev
 Open `http://localhost:5173` (or run production single-port mode after `cd frontend && npm run build` at `http://localhost:8000`).
 
 ---
+
+---
+
+## Deployment (Render Free Tier & Docker)
+
+Python is pinned to **3.11.11** everywhere (`.python-version`, `runtime.txt`, `PYTHON_VERSION` in `render.yaml`, `python:3.11.11-slim` in the `Dockerfile`). Without the pin, Render selects a newer interpreter where `numpy`/`scipy` fall back to source builds and fail with `ERROR: Unknown compiler(s): [['gfortran']]`. Every dependency in `requirements.txt` ships pre-compiled CPython 3.11 wheels, so installs never compile from source:
+
+```bash
+pip install --only-binary=:all: -r requirements.txt   # verified in CI
+```
+
+### Option A — Render Native Python (1-click, free)
+
+Import the repo as a Render Blueprint (`render.yaml`) or create a Web Service with:
+
+- **Build Command**: `pip install --upgrade pip setuptools wheel && pip install --prefer-binary -r requirements.txt`
+- **Start Command**: `uvicorn app:app --host 0.0.0.0 --port $PORT`
+- **Env**: `PYTHON_VERSION=3.11.11`
+
+Render has no `blender` binary, so the dual-engine dispatcher automatically uses the **pure-Python fallback engine**: all presets generate validated `.glb` files in-process (humanoids are static A-pose characters — skinned rigs and native `.blend` files require the Blender engine), and `GET /` serves a built-in interactive Three.js studio. All root entrypoints work identically: `uvicorn app:app`, `uvicorn main:app`, `uvicorn backend.main:app`.
+
+### Option B — Docker (full Blender 4.2 LTS engine + React studio)
+
+```bash
+docker build -t assets-gen-pro .                        # full dual-engine image
+docker build --target runtime-lite -t assets-gen-pro:lite .  # Blender-free, small
+docker run --rm -p 8000:8000 -e PORT=8000 assets-gen-pro
+```
+
+The default image contains the isolated headless Blender 4.2 LTS runtime (`bpy==4.2.23`), the built React Three Fiber frontend (`frontend/dist`, served at `GET /`), and the FastAPI service. Force an engine with `-e STUDIO_GENERATION_ENGINE=blender|python|auto`.
+
+> **GitHub Pages**: CI can deploy the static frontend to Pages, but only after Pages is enabled once in **Settings → Pages → Source: GitHub Actions**. Until then the deployment job is skipped with a warning and CI stays green. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for details, Godot 4 notes in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## CLI Generation & Automated Tests
 

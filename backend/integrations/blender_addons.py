@@ -14,14 +14,14 @@ BLENDER_CAPABILITY_METADATA: dict[str, dict[str, Any]] = {
         "kind": "blender_core",
         "license": "GPL-3.0-or-later",
         "applicable_categories": ["humanoid", "architecture", "environment", "props"],
-        "fallback_strategy": "Required core 3D generation engine",
+        "fallback_strategy": "Pure-Python NumPy+Trimesh fallback engine (backend/fallback) when no Blender runtime is installed",
     },
     "gltf2_exporter": {
         "name": "Blender glTF 2.0 Exporter (io_scene_gltf2)",
         "kind": "blender_core",
         "license": "Apache-2.0 / GPL-2.0-or-later",
         "applicable_categories": ["humanoid", "architecture", "environment", "props"],
-        "fallback_strategy": "Required GLB exporter & roundtrip validator",
+        "fallback_strategy": "Built-in deterministic glTF 2.0 binary writer + Trimesh roundtrip validator (Python fallback engine)",
     },
     "geometry_nodes": {
         "name": "Blender Geometry Nodes Procedural Graph",

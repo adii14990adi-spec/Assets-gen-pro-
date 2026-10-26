@@ -210,8 +210,12 @@ export interface HealthStatus {
   version: string;
   operating_mode: string;
   github_dispatch_configured: boolean;
+  configured_engine?: string;
+  generation_engine?: string;
   blender_available: boolean;
   blender_version?: string | null;
+  blender_runtime?: string | null;
+  python_fallback_available?: boolean;
   active_jobs: number;
   queued_jobs: number;
   capabilities_verified: number;

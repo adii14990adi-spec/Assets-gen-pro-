@@ -144,7 +144,12 @@ def validate_generated_asset(
 ) -> tuple[MeshStats, ValidationReport]:
     """Combine Blender scene diagnostics, binary glTF parsing, and independent Trimesh analysis."""
     checks: list[ValidationCheckItem] = []
-    backends = ["gltf_binary_inspector", "blender_bmesh"]
+    engine_label = (
+        "python_trimesh"
+        if str(blender_payload.get("generation_engine", "")) == "python_fallback"
+        else "blender_bmesh"
+    )
+    backends = ["gltf_binary_inspector", engine_label]
 
     def add_check(
         cid: str,
@@ -197,7 +202,7 @@ def validate_generated_asset(
         "GLB Export & Roundtrip Re-Import",
         reimport_passed,
         "info" if reimport_passed else "error",
-        f"Verified roundtrip re-import ({reimp.get('reimported_triangles', 0):,} triangles across Blender & Trimesh)."
+        f"Verified roundtrip re-import ({reimp.get('reimported_triangles', 0):,} triangles via generation engine & Trimesh)."
         if reimport_passed
         else f"Roundtrip verification failed: reimport={reimp}, trimesh={tm_info.get('error')}",
         reimp,
@@ -308,7 +313,7 @@ def validate_generated_asset(
         "PBR Materials Assigned",
         mats_ok,
         "info" if mats_ok else "error",
-        f"{mat_count} Principled BSDF PBR material(s) verified ({diag.get('texture_count', 0)} embedded texture(s))."
+        f"{mat_count} PBR material(s) verified ({diag.get('texture_count', 0)} embedded texture(s))."
         if mats_ok
         else f"Missing materials on meshes: {missing_mats}",
     )

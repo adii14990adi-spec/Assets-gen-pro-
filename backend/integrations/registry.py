@@ -8,7 +8,12 @@ from functools import lru_cache
 
 from backend.blender.runtime import run_blender_json_probe
 from backend.integrations.blender_addons import BLENDER_CAPABILITY_METADATA, CATEGORY_CAPABILITY_PLAN
-from backend.integrations.mesh_libs import Open3DAdapter, PyMeshLabAdapter, TrimeshAdapter
+from backend.integrations.mesh_libs import (
+    Open3DAdapter,
+    PyMeshLabAdapter,
+    PythonFallbackAdapter,
+    TrimeshAdapter,
+)
 from backend.schemas import AssetCategory, CapabilityStatus
 
 
@@ -19,7 +24,12 @@ class CapabilityRegistry:
         self._cache_ttl = cache_ttl_seconds
         self._cached_at: float = 0.0
         self._cached_items: list[CapabilityStatus] | None = None
-        self._python_adapters = [TrimeshAdapter(), PyMeshLabAdapter(), Open3DAdapter()]
+        self._python_adapters = [
+            PythonFallbackAdapter(),
+            TrimeshAdapter(),
+            PyMeshLabAdapter(),
+            Open3DAdapter(),
+        ]
 
     def list_capabilities(self, force_refresh: bool = False) -> list[CapabilityStatus]:
         now = time.monotonic()
@@ -46,7 +56,11 @@ class CapabilityRegistry:
                         license=meta["license"],
                         applicable_categories=[AssetCategory(c) for c in meta["applicable_categories"]],
                         fallback_strategy=meta["fallback_strategy"],
-                        status_message=f"Blender runtime unavailable ({error_msg or 'not configured'}). Run scripts/setup_blender_runtime.py.",
+                        status_message=(
+                            f"Blender runtime unavailable ({error_msg or 'not configured'}). "
+                            "Pure-Python fallback engine is active for generation; run "
+                            "scripts/setup_blender_runtime.py to enable the full Blender pipeline."
+                        ),
                     )
                 )
 

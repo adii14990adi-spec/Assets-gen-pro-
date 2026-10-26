@@ -1,4 +1,4 @@
-"""Full API + Background Job Worker + Download + Security E2E Tests."""
+"""Full API + Background Job Worker + Download + Security E2E Tests (dual-engine aware)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from backend.main import create_app
 
 
 @pytest.mark.asyncio
-async def test_full_web_to_blender_pipeline_and_downloads(isolated_settings: Settings) -> None:
+async def test_full_web_to_generation_pipeline_and_downloads(isolated_settings: Settings) -> None:
     app = create_app(isolated_settings)
     transport = httpx.ASGITransport(app=app)
 
@@ -23,7 +23,14 @@ async def test_full_web_to_blender_pipeline_and_downloads(isolated_settings: Set
             # 1. Health & Catalog endpoints
             health = (await client.get("/api/health")).json()
             assert health["status"] == "ok"
-            assert health["blender_available"] is True
+            # Dual-engine: Blender on full workstations/CI, pure-Python
+            # fallback on Blender-free hosts (Render Native Python).
+            assert isinstance(health["blender_available"], bool)
+            assert health["python_fallback_available"] is True
+            assert health["generation_engine"] in ("blender", "python_fallback")
+            assert health["generation_engine"] == (
+                "blender" if health["blender_available"] else "python_fallback"
+            )
 
             types_res = await client.get("/api/assets/types")
             assert types_res.status_code == 200
@@ -93,9 +100,15 @@ async def test_full_web_to_blender_pipeline_and_downloads(isolated_settings: Set
             assert len(scene.geometry) >= 1
             assert sum(len(g.faces) for g in scene.geometry.values()) == res_endpoint["asset"]["stats"]["actual_triangles"]
 
+            # Native .blend files only exist under the Blender engine; the
+            # Python fallback honestly reports none and the API 404s cleanly.
             dl_blend = await client.get(f"/api/assets/{asset_id}/download?format=blend")
-            assert dl_blend.status_code == 200
-            assert len(dl_blend.content) > 50_000
+            if res_endpoint["asset"]["blend_filename"]:
+                assert dl_blend.status_code == 200
+                assert len(dl_blend.content) > 50_000
+            else:
+                assert dl_blend.status_code == 404
+                assert res_endpoint["asset"]["blend_download_url"] is None
 
             dl_meta = await client.get(f"/api/assets/{asset_id}/download?format=metadata")
             assert dl_meta.status_code == 200
