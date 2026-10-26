@@ -1,0 +1,4 @@
+# Isolated Headless Blender 4.2 LTS Python 3.11 Runtime
+# Install ONLY into a dedicated Python 3.11 environment via `python scripts/setup_blender_runtime.py`
+bpy==4.2.23
+numpy==1.26.4

@@ -1,0 +1,19 @@
+{
+  "id": "river_ravine_crossing",
+  "name": "Meandering River Ravine & Ford",
+  "category": "environment",
+  "description": "S-curve carved river canyon cutting through rocky banks with shallow tactical ford shoals and translucent water channel mesh.",
+  "tags": ["river", "canyon", "water", "terrain"],
+  "quality_profile": "optimized_mid_poly",
+  "polygon_budget": 5400,
+  "material_preset": "aravalli_biome",
+  "parameters": {
+    "width": 30.0,
+    "depth": 26.0,
+    "elevation": 5.5,
+    "slope_intensity": 0.7,
+    "surface_roughness": 0.45,
+    "terrace_steps": 2,
+    "scatter_density": 0.35
+  }
+}

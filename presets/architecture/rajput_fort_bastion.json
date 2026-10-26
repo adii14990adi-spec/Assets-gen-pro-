@@ -1,0 +1,22 @@
+{
+  "id": "rajput_fort_bastion",
+  "name": "Rajput Hill Fort Bastion & Rampart",
+  "category": "architecture",
+  "description": "Monumental battered stone fort curtain wall with semi-octagonal watch bastion, arrow-slit embrasures, arched gate passage, and merlon crenellations.",
+  "tags": ["rajasthani", "fort", "bastion", "tower", "walls"],
+  "quality_profile": "optimized_mid_poly",
+  "polygon_budget": 5200,
+  "material_preset": "rajasthan_sandstone",
+  "parameters": {
+    "width": 12.0,
+    "depth": 6.5,
+    "height": 8.8,
+    "wall_thickness": 0.75,
+    "opening_width": 2.8,
+    "opening_height": 3.8,
+    "floors": 2,
+    "arch_segments": 12,
+    "roof_style": "chhatri_parapet",
+    "decorative_detail": 0.75
+  }
+}

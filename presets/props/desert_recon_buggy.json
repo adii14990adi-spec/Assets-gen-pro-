@@ -1,0 +1,18 @@
+{
+  "id": "desert_recon_buggy",
+  "name": "Thar Desert Recon Buggy Vehicle",
+  "category": "props",
+  "description": "Mid-poly two-seat off-road Battle Royale recon buggy with tubular roll cage, armored nose, suspension arms, roof lightbar, and treaded tires.",
+  "tags": ["vehicle", "buggy", "transport", "battle-royale"],
+  "quality_profile": "optimized_mid_poly",
+  "polygon_budget": 3800,
+  "material_preset": "desert_camo",
+  "parameters": {
+    "width": 1.95,
+    "depth": 3.55,
+    "height": 1.62,
+    "bevel_amount": 0.02,
+    "panel_detail": 0.8,
+    "wear_amount": 0.4
+  }
+}

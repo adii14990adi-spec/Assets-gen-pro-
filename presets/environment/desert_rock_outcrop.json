@@ -1,0 +1,19 @@
+{
+  "id": "desert_rock_outcrop",
+  "name": "Stratified Desert Cliff & Rock Outcrop",
+  "category": "environment",
+  "description": "Layered sedimentary sandstone cliff formation and tactical boulder cluster for sniper cover and natural chokepoints.",
+  "tags": ["rocks", "cliff", "cover", "desert"],
+  "quality_profile": "optimized_mid_poly",
+  "polygon_budget": 3200,
+  "material_preset": "rajasthan_sandstone",
+  "parameters": {
+    "width": 8.5,
+    "depth": 7.0,
+    "elevation": 5.2,
+    "slope_intensity": 0.85,
+    "surface_roughness": 0.7,
+    "terrace_steps": 5,
+    "scatter_density": 0.45
+  }
+}

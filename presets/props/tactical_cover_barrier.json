@@ -1,0 +1,18 @@
+{
+  "id": "tactical_cover_barrier",
+  "name": "Reinforced Tactical Cover Barrier",
+  "category": "props",
+  "description": "Modular Battle Royale concrete & steel jersey barrier with forklift slots, angled deflection base, and upper armor plate.",
+  "tags": ["cover", "barrier", "modular", "gameplay"],
+  "quality_profile": "optimized_mid_poly",
+  "polygon_budget": 950,
+  "material_preset": "desert_camo",
+  "parameters": {
+    "width": 2.4,
+    "depth": 0.72,
+    "height": 1.18,
+    "bevel_amount": 0.03,
+    "panel_detail": 0.65,
+    "wear_amount": 0.5
+  }
+}

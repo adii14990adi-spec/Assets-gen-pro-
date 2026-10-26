@@ -1,0 +1,24 @@
+{
+  "id": "athletic_male_combatant",
+  "name": "Athletic Male Battle Royale Combatant",
+  "category": "humanoid",
+  "description": "Connected anatomical male combatant mesh with articulated 5-finger hands, tactical shirt & cargo trousers, combat boots, hair, and Godot 4 Humanoid rig.",
+  "tags": ["character", "male", "rigged", "combatant", "humanoid"],
+  "quality_profile": "optimized_mid_poly",
+  "polygon_budget": 28000,
+  "material_preset": "tactical_military",
+  "parameters": {
+    "gender": "male",
+    "height": 1.80,
+    "musculature": 0.65,
+    "shoulder_width": 1.04,
+    "hip_width": 0.98,
+    "limb_length_scale": 1.0,
+    "include_clothing": true,
+    "include_hair": true,
+    "include_shoes": true,
+    "include_armor": false,
+    "include_backpack": false,
+    "include_rig": true
+  }
+}

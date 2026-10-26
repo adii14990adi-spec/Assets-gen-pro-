@@ -1,0 +1,262 @@
+{
+  "asset_id": "real_blender_crate",
+  "job_id": "cli_16db2d7c",
+  "name": "Battle Royale Airdrop Supply Crate",
+  "category": "props",
+  "preset_id": "br_supply_crate",
+  "quality_profile": "prototype",
+  "seed": 42,
+  "polygon_budget": 550,
+  "material_preset": "tactical_military",
+  "parameters": {
+    "width": 1.35,
+    "depth": 0.9,
+    "height": 0.78,
+    "bevel_amount": 0.025,
+    "panel_detail": 0.75,
+    "wear_amount": 0.35
+  },
+  "blender_version": "4.2.23 LTS",
+  "generation_time_seconds": 0.263,
+  "capabilities_used": [
+    "blender_core",
+    "gltf2_exporter",
+    "native_boolean",
+    "bool_tool",
+    "looptools",
+    "geometry_nodes"
+  ],
+  "capabilities_fallback": [],
+  "glb_filename": "real_blender_crate.glb",
+  "glb_size_bytes": 124784,
+  "blend_filename": null,
+  "blend_size_bytes": null,
+  "stats": {
+    "actual_triangles": 1096,
+    "actual_vertices": 600,
+    "gltf_render_vertices": 2376,
+    "polygon_faces": 640,
+    "mesh_count": 1,
+    "material_count": 4,
+    "texture_count": 2,
+    "connected_components": 26,
+    "uv_layer_count": 1,
+    "has_uvs": true,
+    "bounding_box": {
+      "min_corner": [
+        -0.6986,
+        0.0,
+        -0.4747
+      ],
+      "max_corner": [
+        0.6986,
+        0.7922,
+        0.4747
+      ],
+      "dimensions": [
+        1.3973,
+        0.7922,
+        0.9495
+      ],
+      "center": [
+        0.0,
+        0.3961,
+        0.0
+      ],
+      "diagonal": 1.8659
+    },
+    "materials": [
+      {
+        "name": "Mat_tactical_military_primary",
+        "base_color": [
+          0.24,
+          0.29,
+          0.21,
+          1.0
+        ],
+        "metallic": 0.04,
+        "roughness": 0.74,
+        "has_textures": true,
+        "texture_names": [
+          "Mat_tactical_military_primary_AlbedoTex"
+        ]
+      },
+      {
+        "name": "Mat_tactical_military_secondary",
+        "base_color": [
+          0.17,
+          0.18,
+          0.2,
+          1.0
+        ],
+        "metallic": 0.78,
+        "roughness": 0.38,
+        "has_textures": true,
+        "texture_names": [
+          "Mat_tactical_military_secondary_AlbedoTex"
+        ]
+      },
+      {
+        "name": "Mat_tactical_military_accent",
+        "base_color": [
+          0.84,
+          0.56,
+          0.14,
+          1.0
+        ],
+        "metallic": 0.15,
+        "roughness": 0.48,
+        "has_textures": false,
+        "texture_names": []
+      },
+      {
+        "name": "Mat_tactical_military_trim",
+        "base_color": [
+          0.13,
+          0.13,
+          0.14,
+          1.0
+        ],
+        "metallic": 0.12,
+        "roughness": 0.82,
+        "has_textures": false,
+        "texture_names": []
+      }
+    ],
+    "rig": {
+      "has_armature": false,
+      "armature_name": null,
+      "bone_count": 0,
+      "bone_names": [],
+      "root_bones": [],
+      "skinned_mesh_count": 0,
+      "normalized_weights_verified": false,
+      "max_influences_per_vertex": 0,
+      "animation_clips": []
+    }
+  },
+  "validation": {
+    "valid": true,
+    "passed_count": 10,
+    "warning_count": 1,
+    "error_count": 0,
+    "polygon_budget": 550,
+    "within_budget": false,
+    "reimport_verified": true,
+    "validator_backends": [
+      "gltf_binary_inspector",
+      "blender_bmesh",
+      "trimesh"
+    ],
+    "checks": [
+      {
+        "check_id": "glb_container",
+        "name": "GLB Binary Header & Size Bounds",
+        "passed": true,
+        "severity": "info",
+        "message": "Valid glTF 2.0 binary container (124,784 bytes, 1 mesh nodes).",
+        "details": {
+          "size_bytes": 124784
+        }
+      },
+      {
+        "check_id": "export_reimport",
+        "name": "GLB Export & Roundtrip Re-Import",
+        "passed": true,
+        "severity": "info",
+        "message": "Verified roundtrip re-import (1,096 triangles across Blender & Trimesh).",
+        "details": {
+          "passed": true,
+          "reimported_mesh_count": 1,
+          "reimported_triangles": 1096,
+          "reimported_armature_count": 0
+        }
+      },
+      {
+        "check_id": "face_indices",
+        "name": "Valid Face Indices & Finite Coordinates",
+        "passed": true,
+        "severity": "info",
+        "message": "All polygon indices and vertex coordinates are valid and finite.",
+        "details": {}
+      },
+      {
+        "check_id": "degenerate_faces",
+        "name": "Zero-Area / Degenerate Faces",
+        "passed": true,
+        "severity": "info",
+        "message": "Zero degenerate faces detected.",
+        "details": {
+          "degenerate_count": 0
+        }
+      },
+      {
+        "check_id": "normals_winding",
+        "name": "Outward Normals & Consistent Winding",
+        "passed": true,
+        "severity": "info",
+        "message": "Face normals and winding orientation are consistent across meshes.",
+        "details": {}
+      },
+      {
+        "check_id": "manifold_topology",
+        "name": "Manifold Mesh Topology",
+        "passed": true,
+        "severity": "info",
+        "message": "Mesh topology is manifold.",
+        "details": {
+          "non_manifold_edges": 0
+        }
+      },
+      {
+        "check_id": "duplicate_geometry",
+        "name": "Duplicate Coincident Vertices",
+        "passed": true,
+        "severity": "info",
+        "message": "No duplicate coincident vertices found within 1\u00b5m tolerance.",
+        "details": {
+          "duplicate_vertices": 0
+        }
+      },
+      {
+        "check_id": "transforms_scale",
+        "name": "Applied Transforms & Positive Unit Scale",
+        "passed": true,
+        "severity": "info",
+        "message": "All exported objects have unit scale (1.0, 1.0, 1.0) and clean transforms.",
+        "details": {}
+      },
+      {
+        "check_id": "materials_valid",
+        "name": "PBR Materials Assigned",
+        "passed": true,
+        "severity": "info",
+        "message": "4 Principled BSDF PBR material(s) verified (2 embedded texture(s)).",
+        "details": {}
+      },
+      {
+        "check_id": "uv_availability",
+        "name": "UV Coordinates Available",
+        "passed": true,
+        "severity": "info",
+        "message": "UV maps verified on all 1 mesh(es).",
+        "details": {}
+      },
+      {
+        "check_id": "polygon_budget",
+        "name": "Measured Triangle Count vs Target Budget",
+        "passed": false,
+        "severity": "warning",
+        "message": "Actual measured triangles (1,096) exceed target budget (550); consider adjusting detail or quality profile.",
+        "details": {
+          "actual_triangles": 1096,
+          "polygon_budget": 550
+        }
+      }
+    ],
+    "warnings": [
+      "Actual measured triangles (1,096) exceed target budget (550); consider adjusting detail or quality profile."
+    ],
+    "errors": []
+  }
+}
