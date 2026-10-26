@@ -38,7 +38,7 @@ without any `basePath`/`homepage` configuration.
 | 2 | `actions/setup-python@v5` (`python-version: "3.11"`) | Pinned interpreter + pip cache. |
 | 3 | `pip install --prefer-binary numpy scipy trimesh` and `-r requirements-dev.txt` | Generation + test dependencies, wheels only. |
 | 4 | `ruff check scripts tests` | Static analysis gate. |
-| 5 | `pytest -v` | 51 generator / manifest / site / workflow tests. |
+| 5 | `pytest -v` | 70 generator / manifest / site / workflow / add-on tests (8 add-on tests need `bpy` and skip in CI). |
 | 6 | `python scripts/build_all_assets.py` | Regenerates every `.glb` and `public/assets/manifest.json`. |
 | 7 | Inline Python verification | Re-reads each GLB (magic, declared length, manifest parity, hero 1,200–1,500 face band). |
 | 8 | `actions/upload-artifact@v4` | Keeps the generated assets as run artifacts. |
