@@ -22,7 +22,6 @@ import math
 import os
 
 import bpy
-import bmesh
 from mathutils import Vector
 
 # --------------------------------------------------------------------------- #
