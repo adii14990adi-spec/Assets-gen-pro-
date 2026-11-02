@@ -97,7 +97,8 @@ bl_info = {
     "location": "3D Viewport > Sidebar (N) > AssetGenPro",
     "description": "One-click cleanup, retopology, UV unwrap and rig-ready "
                    "prep for AI-generated meshes (bmesh + modifiers only)",
-    "doc_url": DOC_URL,
+    "doc_url": ("https://github.com/adii14990adi-spec/Assets-gen-pro-"
+                "#cleaning-up-an-ai-generated-mesh-optional-blender-add-on"),
     "support": "COMMUNITY",
     "category": "Asset Forge",
 }
